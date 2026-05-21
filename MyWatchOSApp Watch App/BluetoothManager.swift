@@ -13,7 +13,7 @@ var DEBUG = true
 let userDefaults = UserDefaults.standard
 
 enum btStateEnum {
-    case off, start, scanning, scanningIdle, connecting, connected
+    case off, start, scanning, scanningIdle, connecting, connected, reconnecting
 }
 
 enum BluetoothError: Error {
@@ -60,6 +60,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private let packet: Packet = Packet()
     @Published var vescRtStats = VESCRtStats()
     @Published var vescStats = VESCStats()
+    @Published var sessionLogger = SessionLogger()
 
     override init() {
         super.init()
@@ -74,6 +75,10 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     func restart(withNewDevice:Bool=false) {
         print("BluetoothManager RESET")
+        
+        if withNewDevice && sessionLogger.isRecording {
+            sessionLogger.stopSession()
+        }
         
         if (withNewDevice) {
             UserDefaults.standard.removeObject(forKey: "VESC_UUID")
@@ -239,6 +244,9 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             connectTimer = nil
             state = .connected
             packet.resetState()
+            if !sessionLogger.isRecording {
+                sessionLogger.startSession()
+            }
         case .failure(let error):
             stopConnecting()
             print("Failed to connect to peripheral: \(error)")
@@ -256,7 +264,25 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         connectTimer = nil
         vesc = nil
     }
-    
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        print("Disconnected from: \(peripheral.name ?? "Unknown") error: \(error?.localizedDescription ?? "none")")
+        char = nil
+        state = .reconnecting
+        reconnectToKnownDevice()
+    }
+
+    private func reconnectToKnownDevice() {
+        if let savedUUID = UserDefaults.standard.string(forKey: "VESC_UUID") {
+            print("Auto-reconnecting to saved VESC: \(savedUUID)")
+            state = .reconnecting
+            retrievePeripheral(withDeviceID: savedUUID)
+        } else {
+            print("No saved VESC to reconnect to, scanning...")
+            startScanning()
+        }
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         print("didDiscoverServices:" + (peripheral.name ?? "Unnamed Peripheral"))
          let currentDate = Date()
@@ -321,9 +347,8 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         
         switch(vesc.state){
         case .disconnected:
-            print("disconnected")
-            restart()
-            break
+            print("disconnected - waiting for auto-reconnect")
+            return
         case .connecting:
             print("connecting")
             break
@@ -398,6 +423,14 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                 vescRtStats.updateStats(wattHours: ret)
                 //print("Watt-hours: \(ret)")
             }
+
+            sessionLogger.logReading(
+                batteryVoltage: vescRtStats.batteryVoltage,
+                mosTemperature: vescRtStats.mosTemperature,
+                rpm: vescRtStats.rpm,
+                inputCurrent: vescRtStats.inputCurrent,
+                wattHours: vescRtStats.wattHours
+            )
         } else if (id == 128) { //COMM_GET_STATS
             
             let mask = vb.vbPopFrontUInt32();
