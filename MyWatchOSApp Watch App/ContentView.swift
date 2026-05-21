@@ -196,9 +196,16 @@ struct Home: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 3) {
-                    Image(systemName: "waveform")
-                        .foregroundColor(.red)
-                        .font(.system(size: 20))
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .foregroundColor(.red)
+                            .font(.system(size: 20))
+                        if bluetoothManager.sessionLogger.isRecording {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                        }
+                    }
                     
                     Text("Battery (V): \(String(format: "%.1f", bluetoothManager.vescRtStats.batteryVoltage))")
                     Text("VESC Temp (C): \(String(format: "%.1f", bluetoothManager.vescRtStats.mosTemperature))")
@@ -319,10 +326,41 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var showConfirmation = false
+    @State private var isSessionHistoryPresented = false
     
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("Session Logging")) {
+                    if bluetoothManager.sessionLogger.isRecording, let session = bluetoothManager.sessionLogger.currentSession {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                            let (h,m,s) = secondsToHoursMinutesSeconds(Int(session.duration))
+                            Text("Recording \(String(format: "%02d:%02d:%02d", h, m, s))")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        Text("\(session.entryCount) data points")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    } else {
+                        Text("Auto-records when connected")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+
+                    Button(action: {
+                        isSessionHistoryPresented = true
+                    }) {
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                            Text("Session History (\(bluetoothManager.sessionLogger.savedSessions.count))")
+                        }
+                    }
+                }
+
                 Section(header: Text("GPS")) {
                     Toggle("Enable GPS", isOn: Binding(
                         get: { locationManager.isEnabled() },
@@ -379,7 +417,97 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $isSessionHistoryPresented) {
+                SessionHistoryView(logger: bluetoothManager.sessionLogger)
+            }
         }
+    }
+}
+
+struct SessionHistoryView: View {
+    @ObservedObject var logger: SessionLogger
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            if logger.savedSessions.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
+                    Text("No sessions yet")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Button("Done") { dismiss() }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            } else {
+                List {
+                    ForEach(logger.savedSessions) { session in
+                        NavigationLink(destination: SessionDetailView(session: session)) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.startDate, style: .date)
+                                    .font(.system(.caption, design: .rounded))
+                                    .fontWeight(.medium)
+                                Text(session.startDate, style: .time)
+                                    .font(.system(.caption2))
+                                    .foregroundColor(.gray)
+                                let (h,m,s) = secondsToHoursMinutesSeconds(Int(session.duration))
+                                Text("\(String(format: "%02d:%02d:%02d", h, m, s)) - \(session.entryCount) pts")
+                                    .font(.system(.caption2))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            logger.deleteSession(id: logger.savedSessions[index].id)
+                        }
+                    }
+
+                    if logger.savedSessions.count > 1 {
+                        Button(role: .destructive) {
+                            logger.deleteAllSessions()
+                        } label: {
+                            Text("Delete All")
+                                .font(.caption)
+                        }
+                    }
+
+                    Button("Done") { dismiss() }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+                .navigationTitle("Sessions")
+            }
+        }
+    }
+}
+
+struct SessionDetailView: View {
+    let session: SessionLog
+
+    var body: some View {
+        List {
+            Section(header: Text("Summary")) {
+                let (h,m,s) = secondsToHoursMinutesSeconds(Int(session.duration))
+                Text("Duration: \(String(format: "%02d:%02d:%02d", h, m, s))")
+                Text("Data points: \(session.entryCount)")
+                Text("Peak RPM: \(String(format: "%.f", session.peakRPM))")
+                Text("Peak Current: \(String(format: "%.1f", session.peakCurrent)) A")
+                Text("Max Temp: \(String(format: "%.1f", session.maxTemp)) C")
+                Text("Watt-hours: \(String(format: "%.1f", session.lastWattHours))")
+            }
+
+            if let first = session.entries.first, let last = session.entries.last {
+                Section(header: Text("Voltage")) {
+                    Text("Start: \(String(format: "%.1f", first.batteryVoltage)) V")
+                    Text("End: \(String(format: "%.1f", last.batteryVoltage)) V")
+                }
+            }
+        }
+        .navigationTitle(session.startDate, displayedComponents: [.date])
     }
 }
 

@@ -60,6 +60,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private let packet: Packet = Packet()
     @Published var vescRtStats = VESCRtStats()
     @Published var vescStats = VESCStats()
+    @Published var sessionLogger = SessionLogger()
 
     override init() {
         super.init()
@@ -74,6 +75,10 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     func restart(withNewDevice:Bool=false) {
         print("BluetoothManager RESET")
+        
+        if sessionLogger.isRecording {
+            sessionLogger.stopSession()
+        }
         
         if (withNewDevice) {
             UserDefaults.standard.removeObject(forKey: "VESC_UUID")
@@ -239,6 +244,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             connectTimer = nil
             state = .connected
             packet.resetState()
+            sessionLogger.startSession()
         case .failure(let error):
             stopConnecting()
             print("Failed to connect to peripheral: \(error)")
@@ -398,6 +404,14 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                 vescRtStats.updateStats(wattHours: ret)
                 //print("Watt-hours: \(ret)")
             }
+
+            sessionLogger.logReading(
+                batteryVoltage: vescRtStats.batteryVoltage,
+                mosTemperature: vescRtStats.mosTemperature,
+                rpm: vescRtStats.rpm,
+                inputCurrent: vescRtStats.inputCurrent,
+                wattHours: vescRtStats.wattHours
+            )
         } else if (id == 128) { //COMM_GET_STATS
             
             let mask = vb.vbPopFrontUInt32();
