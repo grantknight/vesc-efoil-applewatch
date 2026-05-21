@@ -13,7 +13,7 @@ var DEBUG = true
 let userDefaults = UserDefaults.standard
 
 enum btStateEnum {
-    case off, start, scanning, scanningIdle, connecting, connected
+    case off, start, scanning, scanningIdle, connecting, connected, reconnecting
 }
 
 enum BluetoothError: Error {
@@ -76,7 +76,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     func restart(withNewDevice:Bool=false) {
         print("BluetoothManager RESET")
         
-        if sessionLogger.isRecording {
+        if withNewDevice && sessionLogger.isRecording {
             sessionLogger.stopSession()
         }
         
@@ -244,7 +244,9 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             connectTimer = nil
             state = .connected
             packet.resetState()
-            sessionLogger.startSession()
+            if !sessionLogger.isRecording {
+                sessionLogger.startSession()
+            }
         case .failure(let error):
             stopConnecting()
             print("Failed to connect to peripheral: \(error)")
@@ -262,7 +264,25 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         connectTimer = nil
         vesc = nil
     }
-    
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        print("Disconnected from: \(peripheral.name ?? "Unknown") error: \(error?.localizedDescription ?? "none")")
+        char = nil
+        state = .reconnecting
+        reconnectToKnownDevice()
+    }
+
+    private func reconnectToKnownDevice() {
+        if let savedUUID = UserDefaults.standard.string(forKey: "VESC_UUID") {
+            print("Auto-reconnecting to saved VESC: \(savedUUID)")
+            state = .reconnecting
+            retrievePeripheral(withDeviceID: savedUUID)
+        } else {
+            print("No saved VESC to reconnect to, scanning...")
+            startScanning()
+        }
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         print("didDiscoverServices:" + (peripheral.name ?? "Unnamed Peripheral"))
          let currentDate = Date()
@@ -327,9 +347,8 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         
         switch(vesc.state){
         case .disconnected:
-            print("disconnected")
-            restart()
-            break
+            print("disconnected - waiting for auto-reconnect")
+            return
         case .connecting:
             print("connecting")
             break

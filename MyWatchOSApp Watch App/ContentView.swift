@@ -33,6 +33,8 @@ struct ContentView: View {
             Scan(bluetoothManager: bluetoothManager)
         } else if (bluetoothManager.state == .connecting) {
             Connect(bluetoothManager: bluetoothManager)
+        } else if (bluetoothManager.state == .reconnecting) {
+            Reconnecting()
         } else if (bluetoothManager.state == .off) {
             BTOff()
         } else {
@@ -71,6 +73,33 @@ struct BTOff: View {
                 
                 Text("App has no access to Bluetooth!")
                     .font(.system(.caption, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct Reconnecting: View {
+    var body: some View {
+        ZStack {
+            Color.orange.opacity(0.15)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 8) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .orange))
+                    .scaleEffect(1.5)
+                
+                Text("Reconnecting...")
+                    .font(.system(.headline, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundColor(.orange)
+                
+                Text("Signal lost, trying to reconnect")
+                    .font(.system(.caption2, design: .rounded))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
             }
