@@ -73,7 +73,9 @@ class Packet {
             return toSend
         }
         
-        print("Preparing packet: \(data.hexEncodedString(upperCase: true))")
+        if DEBUG {
+            print("Preparing packet: \(data.hexEncodedString(upperCase: true))")
+        }
         
         let lenTot = data.count
         
