@@ -12,6 +12,7 @@ final class VESCRtStats: ObservableObject {
     var batteryVoltage: Double = 0.0
     var inputCurrent: Double = 0.0
     var mosTemperature: Double = 0.0
+    var motorTemperature: Double = 0.0
     var wattHours: Double = 0.0
     var rpm: Double = 0.0
     var batteryPercent: Double = 0.0
@@ -34,6 +35,7 @@ final class VESCRtStats: ObservableObject {
         batteryVoltage: Double? = nil,
         inputCurrent: Double? = nil,
         mosTemperature: Double? = nil,
+        motorTemperature: Double? = nil,
         wattHours: Double? = nil,
         rpm: Double? = nil,
         batteryPercent: Double? = nil,
@@ -45,6 +47,7 @@ final class VESCRtStats: ObservableObject {
         if let batteryVoltage { self.batteryVoltage = batteryVoltage }
         if let inputCurrent { self.inputCurrent = inputCurrent }
         if let mosTemperature { self.mosTemperature = mosTemperature }
+        if let motorTemperature { self.motorTemperature = motorTemperature }
         if let wattHours { self.wattHours = wattHours }
         if let rpm { self.rpm = rpm }
         if let batteryPercent { self.batteryPercent = batteryPercent }
@@ -58,6 +61,7 @@ final class VESCRtStats: ObservableObject {
         batteryVoltage = 0.0
         inputCurrent = 0.0
         mosTemperature = 0.0
+        motorTemperature = 0.0
         wattHours = 0.0
         rpm = 0.0
         batteryPercent = 0.0

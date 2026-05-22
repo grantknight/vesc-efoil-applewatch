@@ -2,53 +2,35 @@
 //  ContentView.swift
 //  MyWatchOSApp Watch App
 //
-//  Created by Gregory Dymarek on 09/07/2025.
-//
 
 import SwiftUI
 
-/*
-@Observable
-class MyDataStore {
-    var locationEnabled: Bool = false
-    var locationSpeedUnit: GPSSpeedUnit = .ms
-    var locationSpeed: Double = 0.0
-}
-*/
-
 func secondsToHoursMinutesSeconds(_ seconds: Int) -> (Int, Int, Int) {
-    return (seconds / 3600, (seconds % 3600) / 60, (seconds % 3600) % 60)
+    (seconds / 3600, (seconds % 3600) / 60, (seconds % 3600) % 60)
 }
 
 struct ContentView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
-    
+
     var body: some View {
-        
-        //Home(bluetoothManager: bluetoothManager)
-        
-        if (bluetoothManager.state == .start) {
-            Hello(bluetoothManager: bluetoothManager)
-        } else if (bluetoothManager.state == .scanning || bluetoothManager.state == .scanningIdle) {
+        switch bluetoothManager.state {
+        case .start:
+            Hello()
+        case .scanning, .scanningIdle:
             Scan(bluetoothManager: bluetoothManager)
-        } else if (bluetoothManager.state == .connecting) {
+        case .connecting:
             Connect(bluetoothManager: bluetoothManager)
-        } else if (bluetoothManager.state == .off) {
+        case .off:
             BTOff()
-        } else {
+        default:
             Home(bluetoothManager: bluetoothManager)
         }
-         
     }
 }
 
 struct Hello: View {
-    @ObservedObject var bluetoothManager: BluetoothManager
-    
     var body: some View {
-        VStack {
-            Text("Initializing...")
-        }
+        Text("Initializing...")
     }
 }
 
@@ -57,18 +39,18 @@ struct BTOff: View {
         ZStack {
             Color.red.opacity(0.15)
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(.red)
                     .font(.system(size: 24))
                     .symbolEffect(.pulse, options: .repeating)
-                
+
                 Text("Bluetooth Error")
                     .font(.system(.headline, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundColor(.red)
-                
+
                 Text("App has no access to Bluetooth!")
                     .font(.system(.caption, design: .rounded))
                     .foregroundColor(.white)
@@ -82,17 +64,18 @@ struct BTOff: View {
 
 struct Scan: View {
     @ObservedObject var bluetoothManager: BluetoothManager
+
     var body: some View {
         VStack {
             Text("Device list")
             Spacer()
             List {
                 ForEach(bluetoothManager.peripherals, id: \.identifier) { peripheral in
-                    if (peripheral.name != nil) {
-                        Button(action: {
+                    if let name = peripheral.name {
+                        Button {
                             bluetoothManager.connectPeripheral(peripheral: peripheral)
-                        }) {
-                            Text(peripheral.name!)
+                        } label: {
+                            Text(name)
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -102,15 +85,14 @@ struct Scan: View {
                         }
                     }
                 }
-                
-                if (bluetoothManager.state == .scanning) {
-                    ProgressView {
-                    }.id(UUID())
+
+                if bluetoothManager.state == .scanning {
+                    ProgressView()
                 }
 
-                Button(action: {
+                Button {
                     bluetoothManager.stopScanning()
-                }) {
+                } label: {
                     Text("STOP")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
@@ -119,10 +101,10 @@ struct Scan: View {
                         .background(Color.blue)
                         .cornerRadius(10)
                 }
-                
-                Button(action: {
+
+                Button {
                     bluetoothManager.restart()
-                }) {
+                } label: {
                     Text("REFRESH")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
@@ -131,15 +113,15 @@ struct Scan: View {
                         .background(Color.red)
                         .cornerRadius(10)
                 }
-                .buttonStyle(PlainButtonStyle()) // Use plain style for custom appearance
+                .buttonStyle(.plain)
             }
-            
         }
     }
 }
 
 struct Connect: View {
     @ObservedObject var bluetoothManager: BluetoothManager
+
     var body: some View {
         VStack(spacing: 8) {
             Text(bluetoothManager.connectionMessage.isEmpty ? "Connecting..." : bluetoothManager.connectionMessage)
@@ -152,38 +134,20 @@ struct Connect: View {
         }
     }
 }
-/*
-struct Home1: View {
-    let p: Packet = Packet()
-    @ObservedObject var bluetoothManager: BluetoothManager
-    
-    var body: some View {
-        VStack {
-            Text("VESC Stats")
-            Text("Battery V: \(String(format: "%.1f", bluetoothManager.vescStats.batteryVoltage))")
-            Text("VESC Temp C: \(String(format: "%.1f", bluetoothManager.vescStats.mosTemperature))")
-            Text("RPM: \(String(format: "%.f", bluetoothManager.vescStats.rpm))")
-            Button("Reset Connection") {
-                bluetoothManager.restart(withNewDevice: true)
-            }
-        }
-    }
-}
-*/
 
 struct Home: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject private var rtStats: VESCRtStats
     @ObservedObject private var sessionStats: VESCStats
 
-    @State private var crownOffset: Double = 0.0
-    @State private var tabSelected: Int = 0
+    @State private var crownOffset: Double = 0
+    @State private var tabSelected = 0
     @State private var crownCounter: Double = 0
     @State private var isSettingsPresented = false
 
     @StateObject private var locationManager = LocationManager()
 
-    let tabCount = 3
+    private let tabCount = 4
 
     init(bluetoothManager: BluetoothManager) {
         self.bluetoothManager = bluetoothManager
@@ -191,57 +155,54 @@ struct Home: View {
         _sessionStats = ObservedObject(wrappedValue: bluetoothManager.vescStats)
     }
 
-    private var displaySpeedUnit: GPSSpeedUnit {
+    private var speedUnit: GPSSpeedUnit {
         locationManager.getSpeedUnit()
     }
 
-    private var vescDisplaySpeed: Double {
-        formatVescSpeed(rtStats.vescSpeed, unit: displaySpeedUnit)
+    private var vescSpeed: Double {
+        formatVescSpeed(rtStats.vescSpeed, unit: speedUnit)
+    }
+
+    /// Prefer the higher of VESC wheel speed and GPS when GPS is enabled.
+    private var displaySpeed: Double {
+        guard locationManager.isEnabled() else { return vescSpeed }
+        return max(vescSpeed, locationManager.speed)
     }
 
     var body: some View {
         TabView(selection: $tabSelected) {
+            DashboardView(
+                rtStats: rtStats,
+                displaySpeed: displaySpeed,
+                speedUnit: speedUnit,
+                connectionMessage: bluetoothManager.connectionMessage
+            )
+            .tag(0)
+
             ZStack {
                 Color.blue.opacity(0.1)
                     .ignoresSafeArea()
 
                 VStack(spacing: 3) {
-                    if !bluetoothManager.connectionMessage.isEmpty {
-                        Text(bluetoothManager.connectionMessage)
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                    }
-
                     Image(systemName: "waveform")
                         .foregroundColor(.red)
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
 
-                    Text("Speed (\(displaySpeedUnit.rawValue)): \(String(format: "%.1f", vescDisplaySpeed))")
-                    Text("Power (W): \(String(format: "%.0f", rtStats.instantWatts))")
-                    Text("Battery: \(String(format: "%.0f", rtStats.batteryPercent))% (\(String(format: "%.1f", rtStats.batteryVoltage)) V)")
-                    Text("VESC Temp (C): \(String(format: "%.1f", rtStats.mosTemperature))")
-                    Text("Current (A): \(String(format: "%.1f", rtStats.inputCurrent))")
-                    Text("RPM: \(String(format: "%.0f", rtStats.rpm))")
+                    Text("Speed: \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)")
+                    Text("Power: \(String(format: "%.0f", rtStats.instantWatts)) W")
+                    Text("Battery: \(String(format: "%.0f", rtStats.batteryPercent))% · \(String(format: "%.1f", rtStats.batteryVoltage)) V")
+                    Text("MOS: \(String(format: "%.1f", rtStats.mosTemperature))°  Motor: \(String(format: "%.1f", rtStats.motorTemperature))°")
+                    Text("RPM: \(String(format: "%.0f", rtStats.rpm))  A: \(String(format: "%.1f", rtStats.inputCurrent))")
 
                     let lag = rtStats.timeSinceLastUpdate
-                    if lag < 3600 {
-                        Text("Lag (s): \(String(format: "%.0f", lag))")
-                    } else {
-                        Text("Lag (s): N/A")
-                    }
-
-                    if locationManager.isEnabled() {
-                        Text("GPS (\(displaySpeedUnit.rawValue)): \(String(format: "%.1f", locationManager.speed))")
-                    }
-
-                    Button("Settings") {
-                        isSettingsPresented = true
-                    }
-                    .font(.caption)
+                    Text(lag < 3600 ? "Lag: \(String(format: "%.0f", lag))s" : "Lag: —")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
+                .font(.caption)
                 .padding()
             }
-            .tag(0)
+            .tag(1)
 
             ZStack {
                 Color.purple.opacity(0.1)
@@ -250,26 +211,25 @@ struct Home: View {
                 VStack(spacing: 3) {
                     Image(systemName: "chart.bar.fill")
                         .foregroundColor(.purple)
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
 
                     let (h, m, s) = secondsToHoursMinutesSeconds(Int(sessionStats.runTime))
-                    Text("Run time: \(String(format: "%02d", h)):\(String(format: "%02d", m)):\(String(format: "%02d", s))")
-                    Text("Power: \(String(format: "%.0f", sessionStats.avgPower))/\(String(format: "%.0f", sessionStats.maxPower)) W")
-                    Text("Current: \(String(format: "%.1f", sessionStats.avgCurrent))/\(String(format: "%.1f", sessionStats.maxCurrent)) A")
-                    Text("VESC Temp: \(String(format: "%.1f", sessionStats.avgMosTemperature))/\(String(format: "%.1f", sessionStats.maxMosTemperature)) C")
-                    Text("Wh used: \(String(format: "%.1f", rtStats.wattHours))")
+                    Text("Run: \(String(format: "%02d", h)):\(String(format: "%02d", m)):\(String(format: "%02d", s))")
+                    Text("Power avg/max: \(String(format: "%.0f", sessionStats.avgPower))/\(String(format: "%.0f", sessionStats.maxPower)) W")
+                    Text("Current avg/max: \(String(format: "%.1f", sessionStats.avgCurrent))/\(String(format: "%.1f", sessionStats.maxCurrent)) A")
+                    Text("MOS avg/max: \(String(format: "%.1f", sessionStats.avgMosTemperature))/\(String(format: "%.1f", sessionStats.maxMosTemperature))°")
+                    Text("Wh: \(String(format: "%.1f", rtStats.wattHours))")
                 }
+                .font(.caption)
                 .padding()
             }
-            .tag(1)
+            .tag(2)
 
             ZStack {
                 Color.green.opacity(0.1)
                     .ignoresSafeArea()
 
-                VStack(spacing: 6) {
-                    Text("Connection")
-                        .font(.headline)
+                VStack(spacing: 8) {
                     Text(rtStats.isConnected ? "VESC connected" : "Not connected")
                         .font(.caption)
                     Button("Settings") {
@@ -277,15 +237,13 @@ struct Home: View {
                     }
                     .font(.caption)
                 }
-                .padding()
             }
-            .tag(2)
+            .tag(3)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager)
         }
         .tabViewStyle(.page)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusable()
         .digitalCrownRotation(
             detent: $crownOffset,
@@ -296,128 +254,103 @@ struct Home: View {
             isContinuous: true,
             onChange: { crownEvent in
                 crownCounter += crownEvent.velocity
-                if (crownCounter>10.0) {
-                    crownCounter=10.0
-                    
-                    if (tabSelected<tabCount-1) { //still more tabs
-                        tabSelected+=1;
+                if crownCounter > 10 {
+                    crownCounter = 10
+                    if tabSelected < tabCount - 1 {
+                        tabSelected += 1
                     }
                 }
-                if (crownCounter<0.0) {
-                    crownCounter=0.0
-                    
-                    if (tabSelected>0) {
-                        tabSelected-=1;
+                if crownCounter < 0 {
+                    crownCounter = 0
+                    if tabSelected > 0 {
+                        tabSelected -= 1
                     }
                 }
-
             }
         )
+        .onChange(of: rtStats.timeSinceLastUpdate) { _, _ in
+            bluetoothManager.publishTelemetrySnapshot(
+                displaySpeed: displaySpeed,
+                speedUnit: speedUnit
+            )
+        }
+        .onChange(of: locationManager.speed) { _, _ in
+            bluetoothManager.publishTelemetrySnapshot(
+                displaySpeed: displaySpeed,
+                speedUnit: speedUnit
+            )
+        }
     }
 }
 
 struct SettingsView: View {
     @ObservedObject var locationManager: LocationManager
     @ObservedObject var bluetoothManager: BluetoothManager
-    
+
     @Environment(\.dismiss) private var dismiss
-    
     @State private var showConfirmation = false
-    
+    @State private var cellCount = BatteryConfig.cellCount
+    @State private var useVescBattery = BatteryConfig.useVescBatteryLevel
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
-                Section(header: Text("GPS")) {
+                Section("GPS") {
                     Toggle("Enable GPS", isOn: Binding(
                         get: { locationManager.isEnabled() },
-                        set: { newValue in
-                            // Custom logic when setting the value
-                            print("Setting value to: \(newValue)")
-                            locationManager.toggleStatus(status: newValue)
-                        }
+                        set: { locationManager.toggleStatus(status: $0) }
                     ))
-                    Picker("Speed Units", selection: Binding<GPSSpeedUnit>(
+                    Picker("Speed units", selection: Binding(
                         get: { locationManager.getSpeedUnit() },
-                        set: { newValue in
-                            locationManager.setSpeedUnit(newValue)
-                            
-                        })) {
+                        set: { locationManager.setSpeedUnit($0) }
+                    )) {
                         ForEach(GPSSpeedUnit.allCases) { unit in
-                            Text(unit.rawValue)
+                            Text(unit.rawValue).tag(unit)
                         }
                     }
                 }
-                
-                Button(action: {
+
+                Section("Battery") {
+                    Toggle("Use VESC battery %", isOn: $useVescBattery)
+                        .onChange(of: useVescBattery) { _, v in
+                            BatteryConfig.useVescBatteryLevel = v
+                        }
+                    Stepper("Cells: \(cellCount)S", value: $cellCount, in: 6...24)
+                        .onChange(of: cellCount) { _, v in
+                            BatteryConfig.cellCount = v
+                        }
+                    Text("Voltage curve: \(String(format: "%.1f", BatteryConfig.minVoltagePerCell))–\(String(format: "%.1f", BatteryConfig.maxVoltagePerCell)) V/cell when VESC % is off")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Button("Reset pairing") {
                     showConfirmation = true
-                }) {
-                    Text("Reset pairing")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .alert(isPresented: $showConfirmation) {
-                    Alert(
-                        title: Text("Reset Confirmation"),
-                        message: Text("Are you sure you want to reset Bluetooth pairing?"),
-                        primaryButton: .destructive(Text("Reset")) {
-                            showConfirmation = false
-                            dismiss()
-                            // Perform reset action here
-                            bluetoothManager.restart(withNewDevice: true)
-                            
-                        },
-                        secondaryButton: .cancel()
-                    )
-                }
-                
-                Section {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .font(.system(size: 16))
-                    .foregroundColor(.blue)
+                .foregroundColor(.red)
+
+                Button("Done") {
+                    dismiss()
                 }
             }
             .navigationTitle("Settings")
+            .alert("Reset pairing?", isPresented: $showConfirmation) {
+                Button("Reset", role: .destructive) {
+                    dismiss()
+                    bluetoothManager.restart(withNewDevice: true)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Clears saved VESC and returns to device list.")
+            }
+            .onAppear {
+                cellCount = BatteryConfig.cellCount
+                useVescBattery = BatteryConfig.useVescBatteryLevel
+            }
         }
     }
 }
 
-
 #Preview {
     ContentView()
 }
-
-
-//COMM_GET_STATS
-
-/*
- if (mask & (uint32_t(1) << 0)) {
-     values.temp_mos = vb.vbPopFrontDouble16(1e1);
- }
- 
- if (mask & (uint32_t(1) << 2)) {
-     values.current_motor = vb.vbPopFrontDouble32(1e2);
- }
- 
- if (mask & (uint32_t(1) << 3)) {
-     values.current_in = vb.vbPopFrontDouble32(1e2);
- }
- 
- if (mask & (uint32_t(1) << 7)) {
-     values.rpm = vb.vbPopFrontDouble32(1e0);
- }
- 
- if (mask & (uint32_t(1) << 11)) {
-     values.watt_hours = vb.vbPopFrontDouble32(1e4);
- }
- 
- if (mask & (uint32_t(1) << 8)) {
-     values.v_in = vb.vbPopFrontDouble16(1e1);
- }
- 
- */

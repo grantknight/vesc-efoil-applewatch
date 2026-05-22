@@ -340,6 +340,9 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         if mask & (1 << 0) != 0 {
             vescRtStats.updateStats(mosTemperature: vb.vbPopFrontDouble16(scale: 10.0))
         }
+        if mask & (1 << 1) != 0 {
+            vescRtStats.updateStats(motorTemperature: vb.vbPopFrontDouble16(scale: 10.0))
+        }
         if mask & (1 << 3) != 0 {
             vescRtStats.updateStats(inputCurrent: vb.vbPopFrontDouble32(scale: 100.0))
         }
@@ -347,7 +350,9 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             vescRtStats.updateStats(rpm: vb.vbPopFrontDouble32(scale: 1.0))
         }
         if mask & (1 << 8) != 0 {
-            vescRtStats.updateStats(batteryVoltage: vb.vbPopFrontDouble16(scale: 10.0))
+            let voltage = vb.vbPopFrontDouble16(scale: 10.0)
+            vescRtStats.updateStats(batteryVoltage: voltage)
+            applyVoltageBasedBatteryPercent(voltage)
         }
         if mask & (1 << 11) != 0 {
             vescRtStats.updateStats(wattHours: vb.vbPopFrontDouble32(scale: 10000.0))
@@ -362,8 +367,29 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         }
         if mask & (1 << 8) != 0 {
             let level = vb.vbPopFrontDouble16(scale: 1000.0)
-            vescRtStats.updateStats(batteryPercent: level * 100.0)
+            if BatteryConfig.useVescBatteryLevel {
+                vescRtStats.updateStats(batteryPercent: level * 100.0)
+            }
         }
+    }
+
+    private func applyVoltageBasedBatteryPercent(_ voltage: Double) {
+        let computed = BatteryConfig.percent(fromVoltage: voltage)
+        if !BatteryConfig.useVescBatteryLevel {
+            vescRtStats.updateStats(batteryPercent: computed)
+        } else if vescRtStats.batteryPercent <= 0 {
+            // Fallback when VESC does not report battery_level (older firmware).
+            vescRtStats.updateStats(batteryPercent: computed)
+        }
+    }
+
+    func publishTelemetrySnapshot(displaySpeed: Double, speedUnit: GPSSpeedUnit) {
+        TelemetryPublisher.publish(
+            rt: vescRtStats,
+            speed: displaySpeed,
+            speedUnit: speedUnit,
+            isConnected: vescRtStats.isConnected
+        )
     }
 
     private func parseStats(_ vb: inout VByteArray) {
@@ -405,6 +431,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         mask |= UInt32(1) << 8
         mask |= UInt32(1) << 7
         mask |= UInt32(1) << 3
+        mask |= UInt32(1) << 1  // motor temp
         mask |= UInt32(1) << 0
         vb.vbAppendUInt32(mask)
         sendData(data: vb.data)

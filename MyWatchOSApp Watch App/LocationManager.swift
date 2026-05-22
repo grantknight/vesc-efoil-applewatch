@@ -2,127 +2,134 @@
 //  LocationManager.swift
 //  MyWatchOSApp
 //
-//  Created by Gregory Dymarek on 11/08/2025.
-//
 
 import CoreLocation
-
-/*
-enum GPSSpeedUnit: String, CaseIterable, Identifiable {
-    case kph = "kph"
-    case mph = "mph"
-    case ms = "ms"
-    case knots = "knots"
-    
-    var id: GPSSpeedUnit { self }
-    //var id: String { rawValue }
-}*/
 
 enum GPSSpeedUnit: String, CaseIterable, Identifiable {
     case kph
     case mph
     case ms
     case knots
-    
+
     var id: GPSSpeedUnit { self }
 }
 
-// LocationManager to handle CoreLocation updates
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
-    @Published var speedUnit: GPSSpeedUnit = .ms
-    @Published var speed: Double = 0.0 // Speed in kph
-    @Published var isTracking: Bool = false // Tracks whether location updates are active
-    
+    @Published var speedUnit: GPSSpeedUnit = .mph
+    @Published var speed: Double = 0.0
+    @Published var isTracking: Bool = false
+
+    private static let gpsEnabledKey = "GPS_ENABLED"
+    private static let speedUnitKey = "GPS_SPEEDUNIT"
+    private static let gpsDefaultAppliedKey = "GPS_DEFAULTS_APPLIED"
+
     override init() {
-        let x = UserDefaults.standard.string(forKey: "GPS_SPEEDUNIT")
-        self.speedUnit = GPSSpeedUnit(rawValue: (x ?? "ms"))!
-        
+        applyFirstLaunchDefaultsIfNeeded()
+
+        if let stored = UserDefaults.standard.string(forKey: Self.speedUnitKey),
+           let unit = GPSSpeedUnit(rawValue: stored) {
+            speedUnit = unit
+        }
+
         super.init()
-        
+
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        //locationManager.distanceFilter = 10 // Update every 10 meters
-        print("requesting location authorization")
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.requestWhenInUseAuthorization()
 
+        if isEnabled() {
+            start()
+        }
     }
-    
+
+    /// Efoil: GPS on by default, mph default speed unit.
+    private func applyFirstLaunchDefaultsIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Self.gpsDefaultAppliedKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.gpsEnabledKey)
+        UserDefaults.standard.set(GPSSpeedUnit.mph.rawValue, forKey: Self.speedUnitKey)
+        UserDefaults.standard.set(true, forKey: Self.gpsDefaultAppliedKey)
+    }
+
     func isEnabled() -> Bool {
-        return (UserDefaults.standard.string(forKey: "GPS_ENABLED") == "true")
+        if UserDefaults.standard.object(forKey: Self.gpsEnabledKey) == nil {
+            return true
+        }
+        if let stored = UserDefaults.standard.object(forKey: Self.gpsEnabledKey) as? Bool {
+            return stored
+        }
+        // Legacy installs stored "true" / "false" strings.
+        return UserDefaults.standard.string(forKey: Self.gpsEnabledKey) == "true"
     }
-    
+
     func toggleStatus(status: Bool) {
-        UserDefaults.standard.set(status.description, forKey: "GPS_ENABLED")
-        if (status) {
+        UserDefaults.standard.set(status, forKey: Self.gpsEnabledKey)
+        if status {
             start()
         } else {
             stop()
         }
     }
-    
+
     func start() {
-        if (isTracking) { return }
-        print("LocationManager: start")
+        guard !isTracking else { return }
         locationManager.startUpdatingLocation()
         isTracking = true
     }
-    
+
     func stop() {
-        if (!isTracking) { return }
-        print("LocationManager: stop")
+        guard isTracking else { return }
         locationManager.stopUpdatingLocation()
         speed = 0.0
         isTracking = false
     }
 
     func setSpeedUnit(_ unit: GPSSpeedUnit) {
-        UserDefaults.standard.set(unit.rawValue, forKey: "GPS_SPEEDUNIT")
+        UserDefaults.standard.set(unit.rawValue, forKey: Self.speedUnitKey)
         speedUnit = unit
     }
-    
+
     func getSpeedUnit() -> GPSSpeedUnit {
-        return self.speedUnit
+        speedUnit
     }
-    
-    // CLLocationManagerDelegate method
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        var speed = max(location.speed, 0) //meters per second by the API
-        
-        if (speedUnit == .ms) {} //speed = speed
-        else if (speedUnit == .kph) {
-            speed *= 3.6;
-        } else if (speedUnit == .mph) {
-            speed *= 2.23694
-        } else if (speedUnit == .knots) {
-            speed *= 1.94384
+        var speedMs = max(location.speed, 0)
+
+        switch speedUnit {
+        case .ms:
+            break
+        case .kph:
+            speedMs *= 3.6
+        case .mph:
+            speedMs *= 2.23694
+        case .knots:
+            speedMs *= 1.94384
         }
 
         DispatchQueue.main.async {
-            self.speed = speed
+            self.speed = speedMs
         }
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location error: \(error.localizedDescription)")
+        if DEBUG { print("Location error: \(error.localizedDescription)") }
         DispatchQueue.main.async {
             self.isTracking = false
             self.speed = 0.0
         }
     }
-    
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            print("location access granted")
-            if (isEnabled()) {
+            if isEnabled() {
                 start()
             }
         case .denied, .restricted:
             speed = 0.0
             isTracking = false
-            print("Location access denied or restricted")
         default:
             break
         }
