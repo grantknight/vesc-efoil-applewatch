@@ -18,7 +18,15 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     @Published var speedUnit: GPSSpeedUnit = .mph
     @Published var speed: Double = 0.0
+    @Published var rawSpeedMs: Double = 0.0
+    @Published var smoothedSpeedMs: Double = 0.0
+    @Published var currentCoordinate: CLLocationCoordinate2D?
+    @Published var headingDegrees: Double?
+    @Published var smoothedHeadingDegrees: Double?
     @Published var isTracking: Bool = false
+
+    private let speedSmoothingAlpha: Double = 0.25
+    private let headingSmoothingAlpha: Double = 0.22
 
     private static let gpsEnabledKey = "GPS_ENABLED"
     private static let speedUnitKey = "GPS_SPEEDUNIT"
@@ -36,6 +44,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        locationManager.headingFilter = 3
         locationManager.requestWhenInUseAuthorization()
 
         if isEnabled() {
@@ -74,13 +83,21 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func start() {
         guard !isTracking else { return }
         locationManager.startUpdatingLocation()
+        if CLLocationManager.headingAvailable() {
+            locationManager.startUpdatingHeading()
+        }
         isTracking = true
     }
 
     func stop() {
         guard isTracking else { return }
         locationManager.stopUpdatingLocation()
+        locationManager.stopUpdatingHeading()
         speed = 0.0
+        rawSpeedMs = 0.0
+        smoothedSpeedMs = 0.0
+        headingDegrees = nil
+        smoothedHeadingDegrees = nil
         isTracking = false
     }
 
@@ -96,6 +113,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         var speedMs = max(location.speed, 0)
+        let rawMs = speedMs
+        let coordinate = location.coordinate
 
         switch speedUnit {
         case .ms:
@@ -110,7 +129,32 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
         DispatchQueue.main.async {
             self.speed = speedMs
+            self.rawSpeedMs = rawMs
+            self.smoothedSpeedMs = self.smoothedSpeedMs == 0
+                ? rawMs
+                : (self.smoothedSpeedMs * (1 - self.speedSmoothingAlpha)) + (rawMs * self.speedSmoothingAlpha)
+            self.currentCoordinate = coordinate
         }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        let trueHeading = newHeading.trueHeading
+        let magneticHeading = newHeading.magneticHeading
+        let resolved = trueHeading >= 0 ? trueHeading : magneticHeading
+        guard resolved >= 0 else { return }
+        DispatchQueue.main.async {
+            self.headingDegrees = resolved
+            if let previous = self.smoothedHeadingDegrees {
+                let delta = self.shortestAngleDelta(from: previous, to: resolved)
+                self.smoothedHeadingDegrees = self.normalizeAngle(previous + (delta * self.headingSmoothingAlpha))
+            } else {
+                self.smoothedHeadingDegrees = resolved
+            }
+        }
+    }
+
+    func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
+        true
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -118,6 +162,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         DispatchQueue.main.async {
             self.isTracking = false
             self.speed = 0.0
+            self.rawSpeedMs = 0.0
+            self.smoothedSpeedMs = 0.0
+            self.headingDegrees = nil
+            self.smoothedHeadingDegrees = nil
         }
     }
 
@@ -133,5 +181,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         default:
             break
         }
+    }
+
+    private func normalizeAngle(_ angle: Double) -> Double {
+        var value = angle.truncatingRemainder(dividingBy: 360)
+        if value < 0 {
+            value += 360
+        }
+        return value
+    }
+
+    private func shortestAngleDelta(from: Double, to: Double) -> Double {
+        var delta = normalizeAngle(to) - normalizeAngle(from)
+        if delta > 180 {
+            delta -= 360
+        } else if delta < -180 {
+            delta += 360
+        }
+        return delta
     }
 }

@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import MapKit
+import CoreLocation
 
 func secondsToHoursMinutesSeconds(_ seconds: Int) -> (Int, Int, Int) {
     (seconds / 3600, (seconds % 3600) / 60, (seconds % 3600) % 60)
@@ -144,10 +146,12 @@ struct Home: View {
     @State private var tabSelected = 0
     @State private var crownCounter: Double = 0
     @State private var isSettingsPresented = false
+    @State private var smoothedEta: TimeInterval?
 
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var destinationManager = DestinationManager()
 
-    private let tabCount = 4
+    private let tabCount = 5
 
     init(bluetoothManager: BluetoothManager) {
         self.bluetoothManager = bluetoothManager
@@ -159,14 +163,52 @@ struct Home: View {
         locationManager.getSpeedUnit()
     }
 
-    private var vescSpeed: Double {
+    private var vescSpeedDisplay: Double {
         formatVescSpeed(rtStats.vescSpeed, unit: speedUnit)
     }
 
     /// Prefer the higher of VESC wheel speed and GPS when GPS is enabled.
     private var displaySpeed: Double {
-        guard locationManager.isEnabled() else { return vescSpeed }
-        return max(vescSpeed, locationManager.speed)
+        guard locationManager.isEnabled() else { return vescSpeedDisplay }
+        return max(vescSpeedDisplay, locationManager.speed)
+    }
+
+    private var travelSpeedMs: Double {
+        let gpsSpeed = locationManager.isEnabled() ? locationManager.smoothedSpeedMs : 0
+        return max(rtStats.vescSpeed, gpsSpeed)
+    }
+
+    private var destinationDistance: Double? {
+        destinationManager.distance(from: locationManager.currentCoordinate)
+    }
+
+    private var destinationETA: TimeInterval? {
+        smoothedEta
+    }
+
+    private var dashboardArrowAngle: Double? {
+        guard destinationManager.destination != nil else { return nil }
+        return destinationManager.arrowAngle(
+            current: locationManager.currentCoordinate,
+            heading: locationManager.smoothedHeadingDegrees
+        )
+    }
+
+    private var dashboardDistanceText: String? {
+        guard destinationManager.destination != nil else { return nil }
+        return destinationManager.formattedDistance(destinationDistance)
+    }
+
+    private var dashboardEtaText: String? {
+        guard destinationManager.destination != nil else { return nil }
+        return destinationManager.formattedETA(destinationETA)
+    }
+
+    private func refreshSmoothedEta() {
+        smoothedEta = destinationManager.smoothedETA(
+            distanceMeters: destinationDistance,
+            speedMs: travelSpeedMs
+        )
     }
 
     var body: some View {
@@ -175,7 +217,10 @@ struct Home: View {
                 rtStats: rtStats,
                 displaySpeed: displaySpeed,
                 speedUnit: speedUnit,
-                connectionMessage: bluetoothManager.connectionMessage
+                connectionMessage: bluetoothManager.connectionMessage,
+                destinationArrowAngle: dashboardArrowAngle,
+                destinationDistanceText: dashboardDistanceText,
+                destinationEtaText: dashboardEtaText
             )
             .tag(0)
 
@@ -193,6 +238,8 @@ struct Home: View {
                     Text("Battery: \(String(format: "%.0f", rtStats.batteryPercent))% · \(String(format: "%.1f", rtStats.batteryVoltage)) V")
                     Text("MOS: \(String(format: "%.1f", rtStats.mosTemperature))°  Motor: \(String(format: "%.1f", rtStats.motorTemperature))°")
                     Text("RPM: \(String(format: "%.0f", rtStats.rpm))  A: \(String(format: "%.1f", rtStats.inputCurrent))")
+                    Text(destinationManager.formattedDistance(destinationDistance))
+                    Text(destinationManager.formattedETA(destinationETA))
 
                     let lag = rtStats.timeSinceLastUpdate
                     Text(lag < 3600 ? "Lag: \(String(format: "%.0f", lag))s" : "Lag: —")
@@ -225,6 +272,16 @@ struct Home: View {
             }
             .tag(2)
 
+            NavigationTabView(
+                locationManager: locationManager,
+                destinationManager: destinationManager,
+                speedUnit: speedUnit,
+                displaySpeed: displaySpeed,
+                travelSpeedMs: travelSpeedMs,
+                smoothedEta: destinationETA
+            )
+            .tag(3)
+
             ZStack {
                 Color.green.opacity(0.1)
                     .ignoresSafeArea()
@@ -238,10 +295,14 @@ struct Home: View {
                     .font(.caption)
                 }
             }
-            .tag(3)
+            .tag(4)
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager)
+            SettingsView(
+                locationManager: locationManager,
+                bluetoothManager: bluetoothManager,
+                destinationManager: destinationManager
+            )
         }
         .tabViewStyle(.page)
         .focusable()
@@ -268,17 +329,199 @@ struct Home: View {
                 }
             }
         )
-        .onChange(of: rtStats.timeSinceLastUpdate) { _, _ in
-            bluetoothManager.publishTelemetrySnapshot(
-                displaySpeed: displaySpeed,
-                speedUnit: speedUnit
-            )
-        }
         .onChange(of: locationManager.speed) { _, _ in
             bluetoothManager.publishTelemetrySnapshot(
                 displaySpeed: displaySpeed,
                 speedUnit: speedUnit
             )
+            refreshSmoothedEta()
+        }
+        .onChange(of: locationManager.currentCoordinate?.latitude ?? 0) { _, _ in
+            bluetoothManager.publishTelemetrySnapshot(
+                displaySpeed: displaySpeed,
+                speedUnit: speedUnit
+            )
+            refreshSmoothedEta()
+        }
+        .onChange(of: locationManager.currentCoordinate?.longitude ?? 0) { _, _ in
+            refreshSmoothedEta()
+        }
+        .onChange(of: rtStats.vescSpeed) { _, _ in
+            refreshSmoothedEta()
+        }
+        .onChange(of: locationManager.smoothedSpeedMs) { _, _ in
+            refreshSmoothedEta()
+        }
+        .onChange(of: destinationManager.destination?.latitude ?? 0) { _, _ in
+            refreshSmoothedEta()
+        }
+        .onChange(of: destinationManager.destination?.longitude ?? 0) { _, _ in
+            refreshSmoothedEta()
+        }
+        .onAppear {
+            refreshSmoothedEta()
+        }
+    }
+}
+
+struct NavigationTabView: View {
+    @ObservedObject var locationManager: LocationManager
+    @ObservedObject var destinationManager: DestinationManager
+    let speedUnit: GPSSpeedUnit
+    let displaySpeed: Double
+    let travelSpeedMs: Double
+    let smoothedEta: TimeInterval?
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.9)
+                .ignoresSafeArea()
+
+            if destinationManager.destination == nil {
+                VStack(spacing: 8) {
+                    Image(systemName: "mappin.slash")
+                        .font(.system(size: 20))
+                        .foregroundColor(.orange)
+                    Text("No destination set")
+                        .font(.caption)
+                    DestinationPickerButton(destinationManager: destinationManager, currentCoordinate: locationManager.currentCoordinate)
+                }
+                .padding()
+            } else {
+                let distance = destinationManager.distance(from: locationManager.currentCoordinate)
+                let eta = destinationManager.etaSeconds(distanceMeters: distance, speedMs: travelSpeedMs)
+                let arrowAngle = destinationManager.arrowAngle(
+                    current: locationManager.currentCoordinate,
+                    heading: locationManager.smoothedHeadingDegrees
+                ) ?? 0
+
+                VStack(spacing: 4) {
+                    Text(destinationManager.destinationName)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    Image(systemName: "location.north.fill")
+                        .font(.system(size: 44, weight: .bold))
+                        .foregroundColor(.cyan)
+                        .rotationEffect(.degrees(arrowAngle))
+                        .animation(.easeInOut(duration: 0.2), value: arrowAngle)
+
+                    Text(destinationManager.formattedDistance(distance))
+                        .font(.caption)
+                    Text(destinationManager.formattedETA(smoothedEta ?? eta))
+                        .font(.caption)
+                        .fontWeight(.semibold)
+
+                    Text("Speed: \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 8) {
+                        DestinationPickerButton(destinationManager: destinationManager, currentCoordinate: locationManager.currentCoordinate)
+                        Button("Clear") {
+                            destinationManager.clearDestination()
+                        }
+                        .font(.caption2)
+                    }
+                }
+                .padding(.horizontal, 6)
+            }
+        }
+    }
+}
+
+struct DestinationPickerButton: View {
+    @ObservedObject var destinationManager: DestinationManager
+    let currentCoordinate: CLLocationCoordinate2D?
+    @State private var showPicker = false
+
+    var body: some View {
+        Button(destinationManager.destination == nil ? "Set destination" : "Edit destination") {
+            showPicker = true
+        }
+        .font(.caption2)
+        .sheet(isPresented: $showPicker) {
+            DestinationPickerView(
+                destinationManager: destinationManager,
+                currentCoordinate: currentCoordinate
+            )
+        }
+    }
+}
+
+private struct MapDestinationPin: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+}
+
+struct DestinationPickerView: View {
+    @ObservedObject var destinationManager: DestinationManager
+    let currentCoordinate: CLLocationCoordinate2D?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var region: MKCoordinateRegion
+
+    init(destinationManager: DestinationManager, currentCoordinate: CLLocationCoordinate2D?) {
+        self.destinationManager = destinationManager
+        self.currentCoordinate = currentCoordinate
+
+        let base = destinationManager.destination ?? currentCoordinate ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
+        _region = State(initialValue: MKCoordinateRegion(
+            center: base,
+            span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+        ))
+    }
+
+    private var annotationItems: [MapDestinationPin] {
+        guard let destination = destinationManager.destination else { return [] }
+        return [MapDestinationPin(coordinate: destination)]
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Pan map, pin center")
+                .font(.caption2)
+
+            Map(
+                coordinateRegion: $region,
+                interactionModes: [.pan, .zoom],
+                annotationItems: annotationItems
+            ) { item in
+                MapMarker(coordinate: item.coordinate, tint: .red)
+            }
+            .overlay(alignment: .center) {
+                Image(systemName: "plus")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(4)
+                    .background(.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+
+            Button("Set pin at center") {
+                destinationManager.setDestination(region.center)
+                dismiss()
+            }
+            .font(.caption)
+
+            if let destination = destinationManager.destination {
+                Text(String(format: "%.4f, %.4f", destination.latitude, destination.longitude))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Button("Cancel") {
+                dismiss()
+            }
+            .font(.caption2)
+        }
+        .padding()
+        .onAppear {
+            if let destination = destinationManager.destination {
+                region.center = destination
+            } else if let currentCoordinate {
+                region.center = currentCoordinate
+            }
         }
     }
 }
@@ -286,11 +529,13 @@ struct Home: View {
 struct SettingsView: View {
     @ObservedObject var locationManager: LocationManager
     @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var destinationManager: DestinationManager
 
     @Environment(\.dismiss) private var dismiss
     @State private var showConfirmation = false
     @State private var cellCount = BatteryConfig.cellCount
     @State private var useVescBattery = BatteryConfig.useVescBatteryLevel
+    @State private var showDestinationPicker = false
 
     var body: some View {
         NavigationStack {
@@ -306,6 +551,26 @@ struct SettingsView: View {
                     )) {
                         ForEach(GPSSpeedUnit.allCases) { unit in
                             Text(unit.rawValue).tag(unit)
+                        }
+                    }
+                }
+
+                Section("Destination") {
+                    if let destination = destinationManager.destination {
+                        Text(String(format: "%.4f, %.4f", destination.latitude, destination.longitude))
+                            .font(.caption2)
+                    } else {
+                        Text("No destination set")
+                            .font(.caption2)
+                    }
+
+                    Button(destinationManager.destination == nil ? "Set destination" : "Edit destination") {
+                        showDestinationPicker = true
+                    }
+
+                    if destinationManager.destination != nil {
+                        Button("Clear destination", role: .destructive) {
+                            destinationManager.clearDestination()
                         }
                     }
                 }
@@ -334,6 +599,12 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showDestinationPicker) {
+                DestinationPickerView(
+                    destinationManager: destinationManager,
+                    currentCoordinate: locationManager.currentCoordinate
+                )
+            }
             .alert("Reset pairing?", isPresented: $showConfirmation) {
                 Button("Reset", role: .destructive) {
                     dismiss()

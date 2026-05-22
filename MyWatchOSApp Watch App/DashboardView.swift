@@ -12,6 +12,9 @@ struct DashboardView: View {
     let displaySpeed: Double
     let speedUnit: GPSSpeedUnit
     let connectionMessage: String
+    let destinationArrowAngle: Double?
+    let destinationDistanceText: String?
+    let destinationEtaText: String?
 
     var body: some View {
         ZStack {
@@ -35,6 +38,26 @@ struct DashboardView: View {
                 Text(speedUnit.rawValue)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.gray)
+
+                if let destinationDistanceText, let destinationEtaText {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.north.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.cyan)
+                            .rotationEffect(.degrees(destinationArrowAngle ?? 0))
+                            .animation(.easeInOut(duration: 0.2), value: destinationArrowAngle ?? 0)
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(destinationDistanceText)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text(destinationEtaText)
+                                .font(.system(size: 10))
+                                .foregroundColor(.cyan)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
 
                 HStack(spacing: 10) {
                     metricColumn(title: "W", value: String(format: "%.0f", rtStats.instantWatts))
