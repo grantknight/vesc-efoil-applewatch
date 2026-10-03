@@ -156,6 +156,15 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     }
     func connectPeripheral(peripheral: CBPeripheral) {
         guard centralManager != nil, centralManager.state == .poweredOn else { return }
+        if sessionLogger.isRecording,
+           let savedIdentifier = UserDefaults.standard.string(forKey: "VESC_UUID"),
+           savedIdentifier != peripheral.identifier.uuidString {
+            sessionLogger.endRide()
+            guard !sessionLogger.isRecording else {
+                connectionMessage = "Save the active ride before changing controller"
+                return
+            }
+        }
         if vesc?.identifier == peripheral.identifier && (state == .connecting || state == .connected) { return }
         reconnectTimer?.invalidate()
         reconnectTimer = nil
@@ -173,14 +182,17 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         connectTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in self?.failConnection("Connection timed out") }
     }
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard centralManager === central else { return }
         guard peripheral.identifier == vesc?.identifier, state == .connecting else { return }
         peripheral.discoverServices([serviceUUID])
     }
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        guard centralManager === central else { return }
         guard peripheral.identifier == vesc?.identifier else { return }
         failConnection("Connection failed")
     }
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        guard centralManager === central else { return }
         guard peripheral.identifier == vesc?.identifier else { return }
         failConnection("Connection lost")
     }
