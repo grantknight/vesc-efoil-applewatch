@@ -8,6 +8,7 @@ permissions:
   contents: read
 jobs:
   verify:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     name: Clean pass ${{ matrix.seed }}
     runs-on: macos-15
     timeout-minutes: 25
@@ -30,10 +31,13 @@ jobs:
           set -o pipefail
           swift test --parallel 2>&1 | tee verification-output/swift-tests.txt
       - name: Watch and complication simulator build
+        id: watch-build
+        if: success() || failure()
         run: |
           set -o pipefail
           xcodebuild -project MyWatchOSApp.xcodeproj -scheme FoilingVESC -configuration Debug -sdk watchsimulator -destination 'generic/platform=watchOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build 2>&1 | tee verification-output/watch-build.txt
       - name: Watch simulator launch and screenshot
+        if: steps.watch-build.outcome == 'success'
         run: bash scripts/simulator-smoke.sh
       - name: Upload exact-run evidence
         if: always()

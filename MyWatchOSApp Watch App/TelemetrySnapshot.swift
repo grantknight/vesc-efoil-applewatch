@@ -18,7 +18,7 @@ struct TelemetrySnapshot: Codable {
     var updatedAt: Date = .distantPast
     private static let storageKey = "TELEMETRY_SNAPSHOT_V2"
 
-    func isFresh(at date: Date = .now) -> Bool {
+    func isFresh(at date: Date = Date()) -> Bool {
         let age = date.timeIntervalSince(updatedAt)
         return isValid && isConnected && age >= 0 && age < Self.staleInterval
     }
