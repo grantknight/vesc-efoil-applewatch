@@ -25,6 +25,7 @@ final class DestinationManager: ObservableObject {
     }
 
     func setDestination(_ coordinate: CLLocationCoordinate2D, name: String = "Pinned destination") {
+        guard Self.validCoordinate(coordinate) else { return }
         destination = coordinate
         destinationName = name
         smoothedEtaSecondsValue = nil
@@ -38,15 +39,18 @@ final class DestinationManager: ObservableObject {
     }
 
     func distance(from current: CLLocationCoordinate2D?) -> CLLocationDistance? {
-        guard let current, let destination else { return nil }
+        guard let current, let destination,
+              Self.validCoordinate(current), Self.validCoordinate(destination) else { return nil }
         let from = CLLocation(latitude: current.latitude, longitude: current.longitude)
         let to = CLLocation(latitude: destination.latitude, longitude: destination.longitude)
-        return from.distance(from: to)
+        let meters = from.distance(from: to)
+        return meters.isFinite && meters >= 0 ? meters : nil
     }
 
     /// Bearing from current point to destination in degrees, normalized 0...360.
     func bearingToDestination(from current: CLLocationCoordinate2D?) -> Double? {
-        guard let current, let destination else { return nil }
+        guard let current, let destination,
+              Self.validCoordinate(current), Self.validCoordinate(destination) else { return nil }
         let lat1 = current.latitude * .pi / 180
         let lat2 = destination.latitude * .pi / 180
         let dLon = (destination.longitude - current.longitude) * .pi / 180
@@ -59,13 +63,15 @@ final class DestinationManager: ObservableObject {
 
     /// Arrow rotation where 0 means straight ahead relative to user's heading.
     func arrowAngle(current: CLLocationCoordinate2D?, heading: Double?) -> Double? {
-        guard let bearing = bearingToDestination(from: current), let heading else { return nil }
+        guard let bearing = bearingToDestination(from: current), let heading, heading.isFinite else { return nil }
         return normalizeSignedDegrees(bearing - heading)
     }
 
     func etaSeconds(distanceMeters: Double?, speedMs: Double) -> TimeInterval? {
-        guard let distanceMeters, distanceMeters > 1, speedMs > 0.5 else { return nil }
-        return distanceMeters / speedMs
+        guard let distanceMeters, distanceMeters.isFinite, distanceMeters > 1,
+              speedMs.isFinite, speedMs > 0.5 else { return nil }
+        let eta = distanceMeters / speedMs
+        return eta.isFinite && eta >= 0 ? eta : nil
     }
 
     func smoothedETA(distanceMeters: Double?, speedMs: Double) -> TimeInterval? {
@@ -84,19 +90,21 @@ final class DestinationManager: ObservableObject {
     }
 
     func formattedETA(_ etaSeconds: TimeInterval?) -> String {
-        guard let etaSeconds else { return "ETA: --" }
-        let total = Int(etaSeconds.rounded())
+        guard let etaSeconds, etaSeconds.isFinite, etaSeconds >= 0 else { return "ETA: --" }
+        let rounded = etaSeconds.rounded()
+        guard rounded < Double(Int.max) else { return "ETA: --" }
+        let total = Int(rounded)
         let hours = total / 3600
         let mins = (total % 3600) / 60
         let secs = total % 60
         if hours > 0 {
-            return String(format: "ETA: %dh %02dm", hours, mins)
+            return "ETA: \(hours)h " + String(format: "%02dm", mins)
         }
         return String(format: "ETA: %02d:%02d", mins, secs)
     }
 
     func formattedDistance(_ meters: Double?) -> String {
-        guard let meters else { return "Distance: --" }
+        guard let meters, meters.isFinite, meters >= 0 else { return "Distance: --" }
         if meters >= 1000 {
             return String(format: "Distance: %.2f km", meters / 1000)
         }
@@ -104,7 +112,7 @@ final class DestinationManager: ObservableObject {
     }
 
     private func save() {
-        guard let destination else { return }
+        guard let destination, Self.validCoordinate(destination) else { return }
         let stored = StoredDestination(
             latitude: destination.latitude,
             longitude: destination.longitude,
@@ -119,8 +127,14 @@ final class DestinationManager: ObservableObject {
               let stored = try? JSONDecoder().decode(StoredDestination.self, from: data) else {
             return
         }
-        destination = CLLocationCoordinate2D(latitude: stored.latitude, longitude: stored.longitude)
+        let coordinate = CLLocationCoordinate2D(latitude: stored.latitude, longitude: stored.longitude)
+        guard Self.validCoordinate(coordinate) else { return }
+        destination = coordinate
         destinationName = stored.name
+    }
+
+    private static func validCoordinate(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        coordinate.latitude.isFinite && coordinate.longitude.isFinite && CLLocationCoordinate2DIsValid(coordinate)
     }
 
     private func normalizeDegrees(_ degrees: Double) -> Double {

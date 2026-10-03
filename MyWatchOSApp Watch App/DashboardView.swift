@@ -38,7 +38,7 @@ struct DashboardView: View {
                     metric("CTRL", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C")
                     metric("MOTOR", value: fresh ? String(format: "%.0f", rtStats.motorTemperature) : "—", unit: "°C")
                 }
-                Text(fresh ? String(format: "%.1f V", rtStats.batteryVoltage) : "Waiting for fresh telemetry")
+                Text(fresh ? String(format: "%.1f V", rtStats.batteryVoltage) + " · " + rtStats.batterySourceLabel : "Waiting for fresh telemetry")
                     .font(.system(size: 10)).foregroundStyle(fresh ? Color.secondary : Color.orange)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }.padding(.horizontal, 8)

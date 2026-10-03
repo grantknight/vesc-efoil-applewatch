@@ -276,4 +276,109 @@ final class RideStoreTests: XCTestCase {
         try store.endRide(at: start.addingTimeInterval(3))
         XCTAssertEqual(try RideStore(directory: directory).rides.first?.samples.first?.batteryPercent, nil)
     }
+    func testExtremeFiniteArchiveDatesAreRejectedWithoutChangingFiles() throws {
+        let store = try RideStore(directory: directory)
+        let ride = try store.startRide(at: start)
+        try store.record(sample(0))
+        try store.record(sample(2))
+        try store.endRide(at: start.addingTimeInterval(3))
+        let url = directory.appendingPathComponent(ride.id.uuidString + ".json")
+        let original = try Data(contentsOf: url)
+        let originalObject = try XCTUnwrap(JSONSerialization.jsonObject(with: original) as? [String: Any])
+        // Date's synthesized Codable accepts these finite numbers; the store must not.
+        for field in ["startedAt", "updatedAt", "endedAt"] {
+            var object = originalObject
+            var archivedRide = try XCTUnwrap(object["ride"] as? [String: Any])
+            archivedRide[field] = 1e100
+            object["ride"] = archivedRide
+            let invalid = try JSONSerialization.data(withJSONObject: object)
+            try invalid.write(to: url)
+            XCTAssertThrowsError(try RideStore(directory: directory), field)
+            XCTAssertEqual(try Data(contentsOf: url), invalid, field)
+        }
+        try original.write(to: url)
+        XCTAssertEqual(try RideStore(directory: directory).rides.first?.id, ride.id)
+    }
+    func testOutOfBoundsAndDisorderedArchivedSampleDatesAreRejectedAndPreserved() throws {
+        let store = try RideStore(directory: directory)
+        let ride = try store.startRide(at: start)
+        try store.record(sample(0))
+        try store.record(sample(2))
+        try store.endRide(at: start.addingTimeInterval(3))
+        let url = directory.appendingPathComponent(ride.id.uuidString + ".json")
+        let original = try Data(contentsOf: url)
+        let originalObject = try XCTUnwrap(JSONSerialization.jsonObject(with: original) as? [String: Any])
+        for invalidDate in [1e100, start.addingTimeInterval(-1).timeIntervalSinceReferenceDate, start.addingTimeInterval(4).timeIntervalSinceReferenceDate] {
+            var object = originalObject
+            var archivedRide = try XCTUnwrap(object["ride"] as? [String: Any])
+            var samples = try XCTUnwrap(archivedRide["samples"] as? [[String: Any]])
+            samples[0]["timestamp"] = invalidDate
+            archivedRide["samples"] = samples
+            object["ride"] = archivedRide
+            let invalid = try JSONSerialization.data(withJSONObject: object)
+            try invalid.write(to: url)
+            XCTAssertThrowsError(try RideStore(directory: directory))
+            XCTAssertEqual(try Data(contentsOf: url), invalid)
+        }
+        var object = originalObject
+        var archivedRide = try XCTUnwrap(object["ride"] as? [String: Any])
+        var samples = try XCTUnwrap(archivedRide["samples"] as? [[String: Any]])
+        samples.swapAt(0, 1)
+        archivedRide["samples"] = samples
+        object["ride"] = archivedRide
+        let invalid = try JSONSerialization.data(withJSONObject: object)
+        try invalid.write(to: url)
+        XCTAssertThrowsError(try RideStore(directory: directory))
+        XCTAssertEqual(try Data(contentsOf: url), invalid)
+    }
+    func testPublicMutatorsRejectUnsupportedDatesBeforeCheckpointMutation() throws {
+        let store = try RideStore(directory: directory)
+        let extreme = Date(timeIntervalSince1970: 1e100)
+        XCTAssertThrowsError(try store.startRide(at: extreme))
+        XCTAssertThrowsError(try store.startRide(at: Date(timeIntervalSince1970: -1)))
+        XCTAssertNil(store.activeRide)
+        let ride = try store.startRide(at: start)
+        XCTAssertThrowsError(try store.endRide(at: extreme))
+        XCTAssertEqual(store.activeRide, ride)
+        var invalid = sample(0)
+        invalid.timestamp = extreme
+        XCTAssertThrowsError(try store.record(invalid))
+        XCTAssertEqual(store.activeRide, ride)
+        XCTAssertThrowsError(try store.connectionChanged(isConnected: false, at: extreme))
+        XCTAssertEqual(store.activeRide, ride)
+        XCTAssertThrowsError(try store.connectionChanged(isConnected: true, at: extreme))
+        XCTAssertEqual(store.activeRide, ride)
+        try store.record(sample(2))
+        XCTAssertEqual(store.activeRide?.totalSampleCount, 1)
+    }
+    func testSameTimestampAfterReconnectCannotCreateAnUnreadableDuplicateArchive() throws {
+        let store = try RideStore(directory: directory)
+        let ride = try store.startRide(at: start)
+        try store.record(sample(0))
+        try store.connectionChanged(isConnected: false, at: start)
+        try store.connectionChanged(isConnected: true, at: start)
+        try store.record(sample(0))
+        XCTAssertEqual(store.activeRide?.totalSampleCount, 1)
+        try store.record(sample(2))
+        XCTAssertEqual(store.activeRide?.distanceMeters, 0)
+        XCTAssertEqual(store.activeRide?.energyWh, 0)
+        try store.endRide(at: start.addingTimeInterval(3))
+        let loaded = try RideStore(directory: directory)
+        XCTAssertEqual(loaded.rides.first?.id, ride.id)
+        XCTAssertEqual(loaded.rides.first?.totalSampleCount, 2)
+        XCTAssertEqual(loaded.rides.first?.samples.count, 2)
+    }
+    func testUnsupportedDisconnectDateStillDropsIntegrationBaseline() throws {
+        let store = try RideStore(directory: directory)
+        try store.startRide(at: start)
+        try store.record(sample(0))
+        try store.record(sample(1))
+        let checkpoint = store.activeRide
+        XCTAssertThrowsError(try store.connectionChanged(isConnected: false, at: Date(timeIntervalSince1970: 1e100)))
+        XCTAssertEqual(store.activeRide, checkpoint)
+        try store.connectionChanged(isConnected: true, at: start.addingTimeInterval(2))
+        try store.record(sample(2))
+        XCTAssertEqual(store.activeRide?.distanceMeters, 5)
+        XCTAssertEqual(store.activeRide?.observedSeconds, 1)
+    }
 }

@@ -1,8 +1,9 @@
 import SwiftUI
 
 func rideDuration(_ seconds: TimeInterval) -> String {
-    let total = Int(max(0, seconds))
-    if total >= 3600 { return String(format: "%d:%02d:%02d", total / 3600, total % 3600 / 60, total % 60) }
+    guard seconds.isFinite, seconds >= 0, seconds < Double(Int.max) else { return "—" }
+    let total = Int(seconds)
+    if total >= 3600 { return "\(total / 3600):" + String(format: "%02d:%02d", total % 3600 / 60, total % 60) }
     return String(format: "%02d:%02d", total / 60, total % 60)
 }
 

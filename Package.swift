@@ -6,7 +6,7 @@ let package = Package(
     products: [.library(name: "VESCCore", targets: ["VESCCore"])],
     targets: [
         .target(name: "VESCCore", path: "MyWatchOSApp Watch App",
-                sources: ["Packet.swift", "VByteArray.swift", "VescTelemetryDecoder.swift", "RideModels.swift", "RideStore.swift", "TelemetrySnapshot.swift"]),
+                sources: ["Packet.swift", "VByteArray.swift", "VescTelemetryDecoder.swift", "RideModels.swift", "RideStore.swift", "TelemetrySnapshot.swift", "VescRequestQueue.swift"]),
         .testTarget(name: "VESCCoreTests", dependencies: ["VESCCore"], path: "Tests/VESCCoreTests")
     ]
 )

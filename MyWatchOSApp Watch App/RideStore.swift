@@ -7,7 +7,7 @@ enum RideStoreError: LocalizedError {
         case .alreadyRecording: return "A ride is already recording. Save it before starting another."
         case .noActiveRide: return "There is no active ride."
         case .invalidSample: return "Telemetry was invalid; the observation was not recorded."
-        case .invalidTime: return "The observation time is earlier than the last saved ride update."
+        case .invalidTime: return "The ride time is out of order or outside the supported years 1970–2200."
         case .corruptArchive(let name): return "Ride archive \(name) could not be read. Existing files have been preserved."
         }
     }
@@ -16,6 +16,9 @@ enum RideStoreError: LocalizedError {
 /// Main-thread-owned store. Each update commits a complete, atomic checkpoint before changing memory.
 /// An interruption can lose only an uncommitted observation, never the previous saved checkpoint.
 final class RideStore {
+    // Bound persisted dates before they reach date formatters or integer duration conversion.
+    // This also catches corrupt, finite JSON numbers that Date itself will otherwise accept.
+    private static let supportedEpochSeconds: ClosedRange<TimeInterval> = 0...7_258_118_400
     private struct Archive: Codable { var schemaVersion: Int = 1; var ride: RideSession }
     private let directory: URL
     private let writeData: (Data, URL) throws -> Void
@@ -61,7 +64,7 @@ final class RideStore {
 
     @discardableResult func startRide(at date: Date = Date()) throws -> RideSession {
         guard activeRide == nil else { throw RideStoreError.alreadyRecording }
-        guard date.timeIntervalSince1970.isFinite else { throw RideStoreError.invalidTime }
+        guard Self.isSupportedDate(date) else { throw RideStoreError.invalidTime }
         let ride = RideSession(startedAt: date, updatedAt: date)
         try persist(ride)
         activeRide = ride
@@ -72,7 +75,7 @@ final class RideStore {
 
     @discardableResult func endRide(at date: Date = Date()) throws -> RideSession {
         guard var ride = activeRide else { throw RideStoreError.noActiveRide }
-        guard date.timeIntervalSince1970.isFinite, date >= ride.updatedAt else { throw RideStoreError.invalidTime }
+        guard Self.isSupportedDate(date), date >= ride.updatedAt else { throw RideStoreError.invalidTime }
         ride.endedAt = date
         ride.updatedAt = date
         try persist(ride)
@@ -87,10 +90,10 @@ final class RideStore {
     func record(_ sample: RideSample) throws {
         guard var ride = activeRide else { return }
         guard sample.isValid else { throw RideStoreError.invalidSample }
-        guard sample.timestamp >= ride.updatedAt else { throw RideStoreError.invalidTime }
+        guard Self.isSupportedDate(sample.timestamp), sample.timestamp >= ride.updatedAt else { throw RideStoreError.invalidTime }
         guard connection != false else { return }
         // Duplicate timestamps never double-count observations or integrate elapsed time.
-        if sample.timestamp == previousSample?.timestamp { return }
+        if sample.timestamp == ride.samples.last?.timestamp { return }
         if let previousSample {
             let dt = sample.timestamp.timeIntervalSince(previousSample.timestamp)
             if dt > 0 && dt <= maximumIntegrationGap {
@@ -124,10 +127,11 @@ final class RideStore {
     func connectionChanged(isConnected: Bool, at date: Date = Date()) throws {
         // Drop integration baseline immediately, including when persistence fails.
         if !isConnected { previousSample = nil }
+        guard Self.isSupportedDate(date) else { throw RideStoreError.invalidTime }
         guard var ride = activeRide else { connection = isConnected; return }
         if !isConnected && connection != false {
             ride.disconnectionCount += 1
-            guard date.timeIntervalSince1970.isFinite, date >= ride.updatedAt else { throw RideStoreError.invalidTime }
+            guard Self.isSupportedDate(date), date >= ride.updatedAt else { throw RideStoreError.invalidTime }
             ride.updatedAt = date
             try persist(ride)
             activeRide = ride
@@ -148,16 +152,23 @@ final class RideStore {
         try writeData(encoder.encode(Archive(ride: ride)), fileURL(ride.id))
     }
     private func sortHistory() { rides.sort { $0.startedAt > $1.startedAt } }
+    private static func isSupportedDate(_ date: Date) -> Bool {
+        date.timeIntervalSince1970.isFinite && supportedEpochSeconds.contains(date.timeIntervalSince1970)
+    }
     private static func isValidArchive(_ ride: RideSession) -> Bool {
         let metrics = [ride.startedAt.timeIntervalSince1970, ride.updatedAt.timeIntervalSince1970,
                        ride.distanceMeters, ride.energyWh, ride.maxSpeedMs, ride.maxWatts,
                        ride.maxMotorTemperatureC, ride.maxControllerTemperatureC,
                        ride.observedSeconds, ride.wattSeconds]
-        return metrics.allSatisfy { $0.isFinite } && ride.updatedAt >= ride.startedAt
-            && (ride.endedAt.map { $0.timeIntervalSince1970.isFinite && $0 >= ride.startedAt } ?? true)
+        let orderedSamples = zip(ride.samples, ride.samples.dropFirst()).allSatisfy { pair in pair.0.timestamp < pair.1.timestamp }
+        return metrics.allSatisfy { $0.isFinite }
+            && isSupportedDate(ride.startedAt) && isSupportedDate(ride.updatedAt)
+            && ride.updatedAt >= ride.startedAt
+            && (ride.endedAt.map { isSupportedDate($0) && $0 == ride.updatedAt } ?? true)
             && ride.totalSampleCount >= ride.samples.count && ride.disconnectionCount >= 0
             && ride.distanceMeters >= 0 && ride.energyWh >= 0 && ride.observedSeconds >= 0
-            && ride.wattSeconds >= 0 && ride.samples.allSatisfy { $0.isValid }
+            && ride.wattSeconds >= 0 && orderedSamples
+            && ride.samples.allSatisfy { $0.isValid && isSupportedDate($0.timestamp) && $0.timestamp >= ride.startedAt && $0.timestamp <= ride.updatedAt }
             && [ride.startBatteryPercent, ride.endBatteryPercent].compactMap { $0 }.allSatisfy { $0.isFinite && (0...100).contains($0) }
     }
 }

@@ -40,6 +40,7 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     private var wasFresh = false
     private var connectedAt: Date?
     private let packet = Packet()
+    private var requestQueue = VescRequestQueue()
     private let serviceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
     private let writeUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
     private let notifyUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -199,6 +200,7 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     private func clearConnection() {
         writeCharacteristic = nil
         notifyCharacteristic = nil
+        requestQueue.reset()
         packet.resetState()
         vescRtStats.resetStats()
         vescStats.resetStats()
@@ -263,18 +265,36 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         packet.processData(data: value)
     }
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard peripheral.identifier == vesc?.identifier, characteristic.uuid == writeUUID, error != nil else { return }
-        failConnection("Telemetry request failed")
+        guard peripheral.identifier == vesc?.identifier, state == .connected,
+              characteristic.uuid == writeUUID else { return }
+        if error != nil { failConnection("Telemetry request failed"); return }
+        requestQueue.complete()
+        drainRequests()
+    }
+    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+        guard peripheral.identifier == vesc?.identifier, state == .connected else { return }
+        drainRequests()
     }
     private func sendData(data: Data) {
-        guard [VescCommand.getValuesSelective, VescCommand.getValuesSetupSelective, VescCommand.getStats].contains(data.first ?? 0),
-              state == .connected, let peripheral = vesc, peripheral.state == .connected,
+        guard state == .connected, requestQueue.enqueue(data) else { return }
+        drainRequests()
+    }
+    private func drainRequests() {
+        guard state == .connected, let peripheral = vesc, peripheral.state == .connected,
               let characteristic = writeCharacteristic else { return }
         let type: CBCharacteristicWriteType = characteristic.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
-        if type == .withoutResponse && !peripheral.canSendWriteWithoutResponse { return }
-        let framed = packet.preparePacket(data: data)
-        guard framed.count <= peripheral.maximumWriteValueLength(for: type) else { return }
-        peripheral.writeValue(framed, for: characteristic, type: type)
+        while requestQueue.inFlight == nil {
+            if type == .withoutResponse && !peripheral.canSendWriteWithoutResponse { return }
+            guard let request = requestQueue.takeNext() else { return }
+            let framed = packet.preparePacket(data: request)
+            guard !framed.isEmpty, framed.count <= peripheral.maximumWriteValueLength(for: type) else {
+                failConnection("Bluetooth query exceeds write capacity")
+                return
+            }
+            peripheral.writeValue(framed, for: characteristic, type: type)
+            if type == .withResponse { return } // Next query is sent after didWriteValueFor acknowledgement.
+            requestQueue.complete()
+        }
     }
     func packetReceived(data: Data) {
         guard state == .connected, let update = VescTelemetryDecoder.decode(data) else { return }
