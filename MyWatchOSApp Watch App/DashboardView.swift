@@ -9,14 +9,23 @@ struct DashboardView: View {
     let connectionMessage: String
     let isRecording: Bool
     let now: Date
-    private var fresh: Bool { rtStats.isFresh(now: now) }
+    var usesSampleData = false
+
+    private var fresh: Bool { usesSampleData ? rtStats.isConnected : rtStats.isFresh(now: now) }
+    private var batteryAvailable: Bool {
+        usesSampleData ? rtStats.batteryPercentSource == .demo : rtStats.batteryPercentIsAvailable
+    }
+    private var statusLabel: String {
+        if usesSampleData { return fresh ? "SAMPLE" : "SAMPLE GAP" }
+        return fresh ? "LIVE" : (rtStats.isConnected ? "STALE DATA" : "RECONNECTING")
+    }
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Circle().fill(fresh ? Color.cyan : Color.orange).frame(width: 5, height: 5)
-                    Text(fresh ? "LIVE" : (rtStats.isConnected ? "STALE DATA" : "RECONNECTING"))
+                    Text(statusLabel)
                         .font(.system(size: 10, weight: .bold)).foregroundStyle(fresh ? Color.cyan : Color.orange)
                     Spacer()
                     if isRecording {
@@ -32,13 +41,13 @@ struct DashboardView: View {
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     metric("POWER", value: fresh ? String(format: "%.0f", rtStats.instantWatts) : "—", unit: "W")
-                    metric("BATTERY", value: fresh && rtStats.batteryPercentIsAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "% est.")
+                    metric("BATTERY", value: fresh && batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "% est.")
                 }.padding(.top, 2)
                 HStack(spacing: 8) {
                     metric("CTRL", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C")
                     metric("MOTOR", value: fresh ? String(format: "%.0f", rtStats.motorTemperature) : "—", unit: "°C")
                 }
-                Text(fresh ? String(format: "%.1f V", rtStats.batteryVoltage) + " · " + rtStats.batterySourceLabel : "Waiting for fresh telemetry")
+                Text(fresh ? String(format: "%.1f V", rtStats.batteryVoltage) + " · " + rtStats.batterySourceLabel : (usesSampleData ? "Sample connection unavailable" : "Waiting for fresh telemetry"))
                     .font(.system(size: 10)).foregroundStyle(fresh ? Color.secondary : Color.orange)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }.padding(.horizontal, 8)
@@ -74,11 +83,9 @@ struct DemoWatchView: View {
                     .buttonStyle(.plain).accessibilityLabel("Exit demo")
             }.padding(.horizontal, 8)
             TabView(selection: $tab) {
-                TimelineView(.periodic(from: .now, by: 2)) { timeline in
-                    DashboardView(rtStats: stats, displaySpeed: 18.4, speedUnit: .kph,
-                                  speedAvailable: true, connectionMessage: "", isRecording: true, now: Date())
-                        .onChange(of: timeline.date) { _, _ in loadSample() }
-                }.tag(0)
+                DashboardView(rtStats: stats, displaySpeed: 18.4, speedUnit: .kph,
+                              speedAvailable: true, connectionMessage: "", isRecording: true,
+                              now: Date(), usesSampleData: true).tag(0)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("Sample ride").font(.headline).foregroundStyle(.cyan)
@@ -121,6 +128,5 @@ struct DemoWatchView: View {
         stats.updateStats(batteryVoltage: 46.8, inputCurrent: 18.2, mosTemperature: 42,
                           motorTemperature: 48, wattHours: 128.4, rpm: 3450,
                           batteryPercent: 76, isConnected: !simulateGap)
-        if !simulateGap { stats.markTelemetryReceived() }
     }
 }
