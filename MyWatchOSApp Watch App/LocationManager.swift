@@ -124,6 +124,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func setSpeedUnit(_ unit: GPSSpeedUnit) {
         UserDefaults.standard.set(unit.rawValue, forKey: Self.speedUnitKey)
         speedUnit = unit
+        speed = formatVescSpeed(rawSpeedMs, unit: unit)
     }
 
     func getSpeedUnit() -> GPSSpeedUnit {
