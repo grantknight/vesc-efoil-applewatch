@@ -63,7 +63,9 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     private func activateBluetooth() {
         guard centralManager == nil else { return }
         centralManager = CBCentralManager(delegate: self, queue: .main)
-        vescTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.vescLoop() }
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in self?.vescLoop() }
+        vescTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
         var cached = TelemetrySnapshot.load()
         cached.isConnected = false
         cached.save()

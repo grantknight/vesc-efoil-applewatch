@@ -76,7 +76,7 @@ struct DemoWatchView: View {
             TabView(selection: $tab) {
                 TimelineView(.periodic(from: .now, by: 2)) { timeline in
                     DashboardView(rtStats: stats, displaySpeed: 18.4, speedUnit: .kph,
-                                  speedAvailable: true, connectionMessage: "", isRecording: true, now: timeline.date)
+                                  speedAvailable: true, connectionMessage: "", isRecording: true, now: Date())
                         .onChange(of: timeline.date) { _, _ in loadSample() }
                 }.tag(0)
                 ScrollView {

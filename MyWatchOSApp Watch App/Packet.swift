@@ -255,9 +255,14 @@ class Packet {
             return -2
         }
         
+        // Once a canonical header and the entire advertised frame have arrived,
+        // consume that frame even if its checksum or terminator is corrupt.
+        // Sliding one byte would interpret the old terminator (3) together with
+        // the next frame's header as a new large length and stall recovery.
+        let assembledLength = len + Int(dataStart) + 3
         // Invalid stop byte
         guard buffer[len + Int(dataStart) + 2] == 3 else {
-            return -1
+            return assembledLength
         }
         
         let crcCalc = crc16(data: Data(buffer[Int(dataStart)..<(Int(dataStart) + len)]))
@@ -266,9 +271,9 @@ class Packet {
         if crcCalc == crcRx {
             let res = Data(buffer[Int(dataStart)..<(Int(dataStart) + len)])
             decodedPackets.append(res)
-            return len + Int(dataStart) + 3
+            return assembledLength
         } else {
-            return -1
+            return assembledLength
         }
     }
 }

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 mkdirSync('verification', { recursive: true });
 const directory = mkdtempSync(join('verification', 'gate-council-'));
-const categories = ['swift_core_tests', 'watch_simulator_build', 'preview_browser_tests', 'independent_review'];
+const categories = ['swift_core_tests', 'watch_simulator_build', 'watch_simulator_launch', 'preview_browser_tests', 'independent_review'];
 const complete = Object.fromEntries(categories.map(name => [name, {
   result: 'PASS', revision: 'revision-1', ...(name === 'independent_review' ? { author_is_reviewer: false } : {})
 }]));

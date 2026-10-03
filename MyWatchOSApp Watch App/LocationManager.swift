@@ -131,7 +131,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
+        guard isEnabled(), let location = locations.last else { return }
         guard location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 50,
               abs(location.timestamp.timeIntervalSinceNow) < 10,
               CLLocationCoordinate2DIsValid(location.coordinate) else { return }
@@ -151,6 +151,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
 
         DispatchQueue.main.async {
+            guard self.isEnabled() else { return }
+            self.isTracking = true
             self.speed = speedMs
             self.rawSpeedMs = rawMs
             self.smoothedSpeedMs = self.smoothedSpeedMs == 0

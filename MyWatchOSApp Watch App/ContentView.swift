@@ -115,7 +115,7 @@ struct Home: View {
                     rtStats: rtStats, displaySpeed: displaySpeed, speedUnit: speedUnit,
                     speedAvailable: locationManager.hasFreshSpeed,
                     connectionMessage: bluetoothManager.connectionMessage,
-                    isRecording: logger.isRecording, now: timeline.date
+                    isRecording: logger.isRecording, now: Date()
                 )
             }.tag(0)
 
@@ -123,13 +123,13 @@ struct Home: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Controller").font(.headline).foregroundStyle(.cyan)
-                        if !rtStats.isFresh(now: timeline.date) {
+                        if !rtStats.isFresh(now: Date()) {
                             Label("Telemetry unavailable", systemImage: "exclamationmark.triangle")
                                 .font(.caption).foregroundStyle(.orange)
                         }
-                        detail("Battery", rtStats.isFresh(now: timeline.date) ? String(format: "%.1f V", rtStats.batteryVoltage) : "—")
-                        detail("Input current", rtStats.isFresh(now: timeline.date) ? String(format: "%.1f A", rtStats.inputCurrent) : "—")
-                        detail("Motor RPM", rtStats.isFresh(now: timeline.date) ? String(format: "%.0f", rtStats.rpm) : "—")
+                        detail("Battery", rtStats.isFresh(now: Date()) ? String(format: "%.1f V", rtStats.batteryVoltage) : "—")
+                        detail("Input current", rtStats.isFresh(now: Date()) ? String(format: "%.1f A", rtStats.inputCurrent) : "—")
+                        detail("Motor RPM", rtStats.isFresh(now: Date()) ? String(format: "%.0f", rtStats.rpm) : "—")
                         Text("GPS reports ground speed. Motor RPM is not travel speed.")
                             .font(.caption2).foregroundStyle(.secondary)
                     }.padding(.horizontal, 8)
@@ -438,6 +438,9 @@ struct SettingsView: View {
                         .onChange(of: cellCount) { _, v in
                             BatteryConfig.cellCount = v
                         }
+                    Button("Apply \(cellCount)S pack") {
+                        BatteryConfig.cellCount = cellCount
+                    }
                     Text("Voltage curve: \(String(format: "%.1f", BatteryConfig.minVoltagePerCell))–\(String(format: "%.1f", BatteryConfig.maxVoltagePerCell)) V/cell when VESC % is off")
                         .font(.caption2)
                         .foregroundColor(.secondary)

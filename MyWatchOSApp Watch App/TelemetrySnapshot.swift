@@ -20,16 +20,24 @@ struct TelemetrySnapshot: Codable {
 
     func isFresh(at date: Date = .now) -> Bool {
         let age = date.timeIntervalSince(updatedAt)
-        return isConnected && age >= 0 && age < Self.staleInterval
+        return isValid && isConnected && age >= 0 && age < Self.staleInterval
+    }
+    var isValid: Bool {
+        [watts, batteryVoltage, mosTempC, motorTempC, updatedAt.timeIntervalSince1970].allSatisfy { $0.isFinite }
+            && (0...400_000).contains(watts) && (0...200).contains(batteryVoltage)
+            && (-100...300).contains(mosTempC) && (-100...300).contains(motorTempC)
+            && (batteryPercent.map { $0.isFinite && (0...100).contains($0) } ?? true)
+            && (speed.map { $0.isFinite && $0 >= 0 && $0 <= 1000 } ?? true)
+            && ["mph", "kph", "ms", "knots"].contains(speedUnit)
     }
     static func load() -> Self {
         guard let defaults = UserDefaults(suiteName: appGroup),
               let data = defaults.data(forKey: storageKey),
-              let snapshot = try? JSONDecoder().decode(Self.self, from: data) else { return Self() }
+              let snapshot = try? JSONDecoder().decode(Self.self, from: data), snapshot.isValid else { return Self() }
         return snapshot
     }
     func save() {
-        guard let defaults = UserDefaults(suiteName: Self.appGroup),
+        guard isValid, let defaults = UserDefaults(suiteName: Self.appGroup),
               let data = try? JSONEncoder().encode(self) else { return }
         defaults.set(data, forKey: Self.storageKey)
     }

@@ -2,13 +2,14 @@
 // Credentials stay in the existing process environment; no credential files are read.
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 const endpoint = 'https://openrouter.ai/api/alpha/decisions';
 const model = 'typesafe/jev-1.13';
 const expectedServedModel = 'typesafe/jev-1.13-20260917';
 const evidencePath = process.argv[2];
 if (!evidencePath) throw new Error('Provide an executed-evidence JSON file');
 const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
-const required = ['swift_core_tests', 'watch_simulator_build', 'preview_browser_tests', 'independent_review'];
+const required = ['swift_core_tests', 'watch_simulator_build', 'watch_simulator_launch', 'preview_browser_tests', 'independent_review'];
 const missing = required.filter(name => !evidence.executed_results?.[name]);
 const failed = required.filter(name => evidence.executed_results?.[name] && (evidence.executed_results[name].result !== 'PASS' || evidence.executed_results[name].revision !== evidence.revision));
 const revisionMissing = typeof evidence.revision !== 'string' || !evidence.revision.trim();
@@ -19,6 +20,34 @@ const report = { milestone: evidence.milestone, revision: evidence.revision, pre
 const key = process.env.OPENROUTER_API_KEY;
 try {
   if (!key) throw new Error('MISSING_ENVIRONMENT_CREDENTIAL');
+  if (preflight !== 'PASS') throw new Error('DETERMINISTIC_GATE_NOT_PASSED');
+  const git = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const dirty = spawnSync('git', ['status', '--porcelain', '--untracked-files=normal'], { encoding: 'utf8' });
+  if (git.status !== 0 || git.stdout.trim() !== evidence.revision || dirty.status !== 0 || dirty.stdout.trim()) throw new Error('CANDIDATE_REVISION_MISMATCH');
+  for (const category of required) {
+    const artifacts = evidence.executed_results[category].artifacts;
+    if (!Array.isArray(artifacts) || !artifacts.length) throw new Error('MISSING_EXECUTED_ARTIFACT');
+    for (const artifact of artifacts) {
+      if (typeof artifact.path !== 'string' || !/^[a-f0-9]{64}$/.test(artifact.sha256 ?? '')) throw new Error('INVALID_ARTIFACT');
+      let data; try { data = readFileSync(artifact.path); } catch { throw new Error('MISSING_EXECUTED_ARTIFACT'); }
+      if (createHash('sha256').update(data).digest('hex') !== artifact.sha256) throw new Error('ARTIFACT_HASH_MISMATCH');
+    }
+  }
+  // Local author assertions cannot substitute for successful jobs on GitHub.
+  if (!Number.isSafeInteger(evidence.github_run_id)) throw new Error('MISSING_CI_RUN');
+  const headers = { Accept: 'application/vnd.github+json' };
+  const repo = 'https://api.github.com/repos/grantknight/vesc-efoil-applewatch';
+  const ci = await fetch(`${repo}/actions/runs/${evidence.github_run_id}`, { headers, signal: AbortSignal.timeout(15000), redirect: 'error' });
+  const jobsResponse = await fetch(`${repo}/actions/runs/${evidence.github_run_id}/jobs?per_page=100`, { headers, signal: AbortSignal.timeout(15000), redirect: 'error' });
+  if (!ci.ok || !jobsResponse.ok) throw new Error('CI_EVIDENCE_UNAVAILABLE');
+  const run = await ci.json(); const jobs = (await jobsResponse.json()).jobs;
+  const steps = ['Protocol and persistence tests', 'Watch and complication simulator build', 'Watch simulator launch and screenshot'];
+  if (run.head_sha !== evidence.revision || run.conclusion !== 'success'
+      || ![101,202,303].every(seed => jobs.some(job => job.name === `Clean pass ${seed}` && job.conclusion === 'success' && steps.every(name => job.steps.some(step => step.name===name && step.conclusion==='success'))))) throw new Error('CI_GATE_NOT_PASSED');
+  const preview = JSON.parse(readFileSync(evidence.preview_report_path, 'utf8'));
+  if (preview.status !== 'PASS' || preview.results.length !== 3 || preview.results.some(r => r.result !== 'PASS' || r.errors.length || r.assertions < 31)
+      || preview.source_sha256 !== createHash('sha256').update(readFileSync('preview/watch-preview.html')).digest('hex')) throw new Error('PREVIEW_GATE_NOT_PASSED');
+  report.authentic_artifacts_verified = true;
   // Never ask a model to override a deterministic HOLD. Still assess absent
   // evidence honestly if that's the current state, without chasing a PASS.
   const payload = JSON.stringify({ model, state: evidence, questions });
@@ -51,7 +80,7 @@ try {
   }
 } catch (error) {
   report.status = 'HOLD';
-  report.error = /^(MISSING_ENVIRONMENT_CREDENTIAL|PAYLOAD_LIMIT|HTTP_\d{3}|RESPONSE_LIMIT|INVALID_RESPONSE|COST_CIRCUIT_BREAKER)$/.test(error.message) ? error.message : 'NETWORK_OR_PROTOCOL_FAILURE';
+  report.error = /^(MISSING_ENVIRONMENT_CREDENTIAL|DETERMINISTIC_GATE_NOT_PASSED|CANDIDATE_REVISION_MISMATCH|MISSING_EXECUTED_ARTIFACT|INVALID_ARTIFACT|ARTIFACT_HASH_MISMATCH|MISSING_CI_RUN|CI_EVIDENCE_UNAVAILABLE|CI_GATE_NOT_PASSED|PREVIEW_GATE_NOT_PASSED|PAYLOAD_LIMIT|HTTP_\d{3}|RESPONSE_LIMIT|INVALID_RESPONSE|COST_CIRCUIT_BREAKER)$/.test(error.message) ? error.message : 'NETWORK_OR_PROTOCOL_FAILURE';
 }
 const reportPath = /\.json$/i.test(evidencePath) ? evidencePath.replace(/\.json$/i, '-jev.json') : evidencePath + '-jev.json';
 writeFileSync(reportPath, JSON.stringify(report, null, 2));

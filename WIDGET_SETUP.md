@@ -1,12 +1,9 @@
-# Watch complication setup (optional)
+# Watch-face complication
 
-The main app already includes a **large-type dashboard** as the first in-app tab. To add a **watch face complication**, create a Widget Extension in Xcode:
+The project includes a built FoilingComplication WidgetKit extension and shared App Group `group.com.grantknight.vescfoil`. Both targets have matching entitlements, and the Watch app embeds the extension.
 
-1. Open `MyWatchOSApp.xcodeproj` on a Mac.
-2. **File → New → Target → Widget Extension** (watchOS).
-3. Name it `FoilingComplication`.
-4. Add `FoilingComplication/FoilingTelemetryWidget.swift` to the extension target.
-5. Add `MyWatchOSApp Watch App/TelemetrySnapshot.swift` and `BatteryConfig.swift` to **both** targets (or duplicate the snapshot types in the extension).
-6. Enable an **App Group** on the watch app and widget extension, then change `TelemetrySnapshot` to use `UserDefaults(suiteName: "group.YOUR_BUNDLE")` so the widget reads live data.
+On a Mac, open MyWatchOSApp.xcodeproj, choose the FoilingVESC scheme, and select your signing team for the container, Watch app and complication targets. Provision the supplied App Group, or register a unique one for your team and replace its name in both entitlement files and TelemetrySnapshot.swift. Keep the identifier identical in all three places.
 
-Until the extension target exists, complications are not built; the in-app dashboard is the supported glance UI.
+After installation, edit a compatible watch face and select VESC Foil Assist in a supported complication slot (rectangular, circular, inline or corner). Tap it to open the app.
+
+The complication shows the last cached reading and its age. It never starts Bluetooth or records rides. Its 60-second cache expiry is separate from the app's 6-second live-telemetry freshness check. WidgetKit controls refresh scheduling and may update later than requested; open the app for current readings. Unknown battery percentage displays a dash rather than zero.
