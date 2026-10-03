@@ -97,24 +97,24 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func start() {
-        guard !isTracking else { return }
+        guard isEnabled(), !isTracking else { return }
+        isTracking = true
         locationManager.startUpdatingLocation()
         if CLLocationManager.headingAvailable() {
             locationManager.startUpdatingHeading()
         }
-        isTracking = true
     }
 
     func stop() {
-        guard isTracking else { return }
+        isTracking = false
         locationManager.stopUpdatingLocation()
         locationManager.stopUpdatingHeading()
         speed = 0.0
         rawSpeedMs = 0.0
         smoothedSpeedMs = 0.0
+        currentCoordinate = nil
         headingDegrees = nil
         smoothedHeadingDegrees = nil
-        isTracking = false
         lastLocationAt = nil
         lastSpeedAt = nil
         lastHeadingAt = nil
@@ -131,7 +131,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard isEnabled(), let location = locations.last else { return }
+        guard isEnabled(), isTracking, let location = locations.last else { return }
         guard location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 50,
               abs(location.timestamp.timeIntervalSinceNow) < 10,
               CLLocationCoordinate2DIsValid(location.coordinate) else { return }
@@ -151,8 +151,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
 
         DispatchQueue.main.async {
-            guard self.isEnabled() else { return }
-            self.isTracking = true
+            guard self.isEnabled(), self.isTracking else { return }
             self.speed = speedMs
             self.rawSpeedMs = rawMs
             self.smoothedSpeedMs = self.smoothedSpeedMs == 0
@@ -165,12 +164,14 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard isEnabled(), isTracking else { return }
         let trueHeading = newHeading.trueHeading
         let magneticHeading = newHeading.magneticHeading
         let resolved = trueHeading >= 0 ? trueHeading : magneticHeading
         guard resolved >= 0 else { return }
         guard newHeading.headingAccuracy >= 0, abs(newHeading.timestamp.timeIntervalSinceNow) < 10 else { return }
         DispatchQueue.main.async {
+            guard self.isEnabled(), self.isTracking else { return }
             self.headingDegrees = resolved
             self.lastHeadingAt = newHeading.timestamp
             if let previous = self.smoothedHeadingDegrees {
@@ -189,7 +190,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         if DEBUG { print("Location error: \(error.localizedDescription)") }
         DispatchQueue.main.async {
-            self.isTracking = false
             self.speed = 0.0
             self.rawSpeedMs = 0.0
             self.smoothedSpeedMs = 0.0
