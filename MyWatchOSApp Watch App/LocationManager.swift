@@ -50,14 +50,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private static let gpsDefaultAppliedKey = "GPS_DEFAULTS_APPLIED"
 
     override init() {
+        super.init()
         applyFirstLaunchDefaultsIfNeeded()
 
         if let stored = UserDefaults.standard.string(forKey: Self.speedUnitKey),
            let unit = GPSSpeedUnit(rawValue: stored) {
             speedUnit = unit
         }
-
-        super.init()
 
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
