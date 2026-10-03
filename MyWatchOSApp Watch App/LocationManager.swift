@@ -4,6 +4,7 @@
 //
 
 import CoreLocation
+import Combine
 
 enum GPSSpeedUnit: String, CaseIterable, Identifiable {
     case kph
@@ -24,6 +25,22 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var headingDegrees: Double?
     @Published var smoothedHeadingDegrees: Double?
     @Published var isTracking: Bool = false
+    @Published private(set) var lastLocationAt: Date?
+    @Published private(set) var lastSpeedAt: Date?
+    @Published private(set) var lastHeadingAt: Date?
+
+    var hasFreshLocation: Bool {
+        guard isEnabled(), isTracking, let lastLocationAt else { return false }
+        return Date().timeIntervalSince(lastLocationAt) < 10
+    }
+    var hasFreshSpeed: Bool {
+        guard hasFreshLocation, let lastSpeedAt else { return false }
+        return Date().timeIntervalSince(lastSpeedAt) < 10
+    }
+    var hasFreshHeading: Bool {
+        guard isTracking, let lastHeadingAt else { return false }
+        return Date().timeIntervalSince(lastHeadingAt) < 10
+    }
 
     private let speedSmoothingAlpha: Double = 0.25
     private let headingSmoothingAlpha: Double = 0.22
@@ -99,6 +116,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         headingDegrees = nil
         smoothedHeadingDegrees = nil
         isTracking = false
+        lastLocationAt = nil
+        lastSpeedAt = nil
+        lastHeadingAt = nil
     }
 
     func setSpeedUnit(_ unit: GPSSpeedUnit) {
@@ -112,7 +132,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        var speedMs = max(location.speed, 0)
+        guard location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 50,
+              abs(location.timestamp.timeIntervalSinceNow) < 10,
+              CLLocationCoordinate2DIsValid(location.coordinate) else { return }
+        var speedMs = location.speed.isFinite && location.speed >= 0 ? location.speed : 0
         let rawMs = speedMs
         let coordinate = location.coordinate
 
@@ -134,6 +157,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 ? rawMs
                 : (self.smoothedSpeedMs * (1 - self.speedSmoothingAlpha)) + (rawMs * self.speedSmoothingAlpha)
             self.currentCoordinate = coordinate
+            self.lastLocationAt = location.timestamp
+            self.lastSpeedAt = location.speed >= 0 && location.speed.isFinite ? location.timestamp : nil
         }
     }
 
@@ -142,8 +167,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let magneticHeading = newHeading.magneticHeading
         let resolved = trueHeading >= 0 ? trueHeading : magneticHeading
         guard resolved >= 0 else { return }
+        guard newHeading.headingAccuracy >= 0, abs(newHeading.timestamp.timeIntervalSinceNow) < 10 else { return }
         DispatchQueue.main.async {
             self.headingDegrees = resolved
+            self.lastHeadingAt = newHeading.timestamp
             if let previous = self.smoothedHeadingDegrees {
                 let delta = self.shortestAngleDelta(from: previous, to: resolved)
                 self.smoothedHeadingDegrees = self.normalizeAngle(previous + (delta * self.headingSmoothingAlpha))
@@ -166,6 +193,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             self.smoothedSpeedMs = 0.0
             self.headingDegrees = nil
             self.smoothedHeadingDegrees = nil
+            self.lastLocationAt = nil
+            self.lastSpeedAt = nil
+            self.lastHeadingAt = nil
         }
     }
 
@@ -176,7 +206,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 start()
             }
         case .denied, .restricted:
+            locationManager.stopUpdatingLocation()
+            locationManager.stopUpdatingHeading()
             speed = 0.0
+            rawSpeedMs = 0.0
+            smoothedSpeedMs = 0.0
+            lastLocationAt = nil
+            lastSpeedAt = nil
+            lastHeadingAt = nil
+            currentCoordinate = nil
+            headingDegrees = nil
+            smoothedHeadingDegrees = nil
             isTracking = false
         default:
             break

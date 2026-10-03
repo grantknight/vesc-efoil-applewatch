@@ -70,28 +70,11 @@ struct VByteArray {
     }
 
     mutating func vbAppendDouble32Auto(_ number: Double) {
-        // Set subnormal numbers to 0
-        var number = number
-        if abs(number) < 1.5e-38 {
-            number = 0.0
-        }
-
-        var exponent: Int32 = 0
-        let fraction = frexp(number, &exponent)
-        let fractionAbs = abs(fraction)
-        var fractionScaled: UInt32 = 0
-
-        if fractionAbs >= 0.5 {
-            fractionScaled = UInt32((fractionAbs - 0.5) * 2.0 * 8_388_608.0)
-            exponent += 126
-        }
-
-        var result = ((UInt32(exponent) & 0xFF) << 23) | (fractionScaled & 0x7FFFFF)
-        if fraction < 0 {
-            result |= 1 << 31;
-        }
-
-        vbAppendUInt32(result)
+        // VESC auto floats use IEEE-754 single precision, with tiny values
+        // flushed to zero. Using bitPattern also handles negative exponents.
+        let narrowed = Float(number)
+        let value: Float = abs(narrowed) < 1.5e-38 ? 0 : narrowed
+        vbAppendUInt32(value.bitPattern)
     }
 
     mutating func vbAppendDouble64Auto(_ number: Double) {
@@ -228,18 +211,17 @@ struct VByteArray {
     }
 
     mutating func vbPopFrontDouble32Auto() -> Double {
-        let result = vbPopFrontUInt32()
-        let exponent = Int32((result >> 23) & 0xFF)
-        let fraction = Int32(result & 0x7FFFFF)
-        let negative = (result & (1 << 31)) != 0
-
-        var f: Float = 0.0
-        if exponent != 0 || fraction != 0 {
-            f = Float(fraction) / (8_388_608.0 * 2.0) + 0.5
-            f = ldexpf(f, (exponent - 126))
+        // Match util/buffer.c, including its special exponent-zero significand rule.
+        // Normal numbers match IEEE Float; subnormal wire patterns do not.
+        let bits = vbPopFrontUInt32()
+        let exponent = Int((bits >> 23) & 0xff)
+        let mantissa = bits & 0x7fffff
+        guard exponent != 0 || mantissa != 0 else {
+            return bits & 0x80000000 != 0 ? -Double.zero : Double.zero
         }
-        
-        return negative ? -Double(f) : Double(f)
+        let significand = Float(Double(mantissa) / 16_777_216 + 0.5)
+        let magnitude = Float(Double(significand) * pow(2, Double(exponent - 126)))
+        return Double(bits & 0x80000000 != 0 ? -magnitude : magnitude)
     }
 
     mutating func vbPopFrontDouble64Auto() -> Double {
@@ -251,8 +233,9 @@ struct VByteArray {
     mutating func vbPopFrontString() -> String {
         guard !data.isEmpty else { return "" }
         guard let nullIndex = data.firstIndex(of: 0) else { return "" }
-        let stringData = data.prefix(nullIndex)
-        data.removeFirst(nullIndex + 1)
+        let length = data.distance(from: data.startIndex, to: nullIndex)
+        let stringData = data.prefix(length)
+        data.removeFirst(length + 1)
         return String(data: stringData, encoding: .utf8) ?? ""
     }
 }

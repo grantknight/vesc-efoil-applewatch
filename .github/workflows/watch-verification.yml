@@ -1,0 +1,44 @@
+name: Watch verification
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Clean pass ${{ matrix.seed }}
+    runs-on: macos-15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [101, 202, 303]
+    env:
+      TEST_SEED: ${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record toolchain and revision
+        run: |
+          mkdir -p verification-output
+          git rev-parse HEAD | tee verification-output/revision.txt
+          xcodebuild -version | tee verification-output/toolchain.txt
+          swift --version | tee -a verification-output/toolchain.txt
+      - name: Protocol and persistence tests
+        run: |
+          set -o pipefail
+          swift test --parallel 2>&1 | tee verification-output/swift-tests.txt
+      - name: Watch and complication simulator build
+        run: |
+          set -o pipefail
+          xcodebuild -project MyWatchOSApp.xcodeproj -scheme FoilingVESC -configuration Debug -sdk watchsimulator -destination 'generic/platform=watchOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build 2>&1 | tee verification-output/watch-build.txt
+      - name: Watch simulator launch and screenshot
+        run: bash scripts/simulator-smoke.sh
+      - name: Upload exact-run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-verification-${{ matrix.seed }}
+          path: verification-output/
+          retention-days: 14

@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		AE9B9A1D2E1E264A00640823 /* MyWatchOSApp Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = AE9B9A1C2E1E264A00640823 /* MyWatchOSApp Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F01100000000000000000001 /* FoilingComplication.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = F01100000000000000000002; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F01100000000000000000003 /* FoilingTelemetryWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01100000000000000000004; };
+		F01100000000000000000005 /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F01100000000000000000006; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -17,6 +20,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = AE9B9A1B2E1E264A00640823;
 			remoteInfo = "MyWatchOSApp Watch App";
+		};
+		F01100000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AE9B9A102E1E264A00640823;
+			proxyType = 1;
+			remoteGlobalIDString = F01100000000000000000010;
+			remoteInfo = FoilingComplication;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -32,11 +42,21 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F01100000000000000000012 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13;
+			files = (F01100000000000000000001, );
+			name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AE9B9A162E1E264A00640823 /* MyWatchOSApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyWatchOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE9B9A1C2E1E264A00640823 /* MyWatchOSApp Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "MyWatchOSApp Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F01100000000000000000002 /* FoilingComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FoilingComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F01100000000000000000004 /* FoilingTelemetryWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoilingTelemetryWidget.swift; sourceTree = "<group>"; };
+		F01100000000000000000006 /* TelemetrySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TelemetrySnapshot.swift; path = "MyWatchOSApp Watch App/TelemetrySnapshot.swift"; sourceTree = SOURCE_ROOT; };
+		F01100000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F01100000000000000000008 /* FoilingComplication.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FoilingComplication.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +75,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F01100000000000000000015 /* Widget Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -62,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				AE9B9A202E1E264A00640823 /* MyWatchOSApp Watch App */,
+				F01100000000000000000013 /* FoilingComplication */,
 				AE9B9A172E1E264A00640823 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -71,9 +93,14 @@
 			children = (
 				AE9B9A162E1E264A00640823 /* MyWatchOSApp.app */,
 				AE9B9A1C2E1E264A00640823 /* MyWatchOSApp Watch App.app */,
+				F01100000000000000000002 /* FoilingComplication.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
+		};
+		F01100000000000000000013 /* FoilingComplication */ = {
+			isa = PBXGroup; children = (F01100000000000000000004, F01100000000000000000006, F01100000000000000000007, F01100000000000000000008, );
+			path = FoilingComplication; sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -104,10 +131,12 @@
 				AE9B9A182E1E264A00640823 /* Sources */,
 				AE9B9A192E1E264A00640823 /* Frameworks */,
 				AE9B9A1A2E1E264A00640823 /* Resources */,
+				F01100000000000000000012 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F01100000000000000000011,
 			);
 			fileSystemSynchronizedGroups = (
 				AE9B9A202E1E264A00640823 /* MyWatchOSApp Watch App */,
@@ -118,6 +147,12 @@
 			productName = "MyWatchOSApp Watch App";
 			productReference = AE9B9A1C2E1E264A00640823 /* MyWatchOSApp Watch App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F01100000000000000000010 /* FoilingComplication */ = {
+			isa = PBXNativeTarget; buildConfigurationList = F01100000000000000000017;
+			buildPhases = (F01100000000000000000014, F01100000000000000000015, F01100000000000000000016, );
+			buildRules = (); dependencies = (); name = FoilingComplication; productName = FoilingComplication;
+			productReference = F01100000000000000000002; productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -154,6 +189,7 @@
 			targets = (
 				AE9B9A152E1E264A00640823 /* MyWatchOSApp */,
 				AE9B9A1B2E1E264A00640823 /* MyWatchOSApp Watch App */,
+				F01100000000000000000010 /* FoilingComplication */,
 			);
 		};
 /* End PBXProject section */
@@ -173,6 +209,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F01100000000000000000016 /* Widget Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -183,6 +220,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F01100000000000000000014 /* Widget Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F01100000000000000000003, F01100000000000000000005, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -191,6 +229,7 @@
 			target = AE9B9A1B2E1E264A00640823 /* MyWatchOSApp Watch App */;
 			targetProxy = AE9B9A1E2E1E264A00640823 /* PBXContainerItemProxy */;
 		};
+		F01100000000000000000011 /* FoilingComplication dependency */ = {isa = PBXTargetDependency; target = F01100000000000000000010; targetProxy = F01100000000000000000009; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -317,14 +356,14 @@
 				CODE_SIGN_ENTITLEMENTS = "MyWatchOSApp Watch App/MyWatchOSApp Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3FLFYUG2Z6;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "MyWatchOSApp-Watch-App-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Foiling VESC Stats";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app needs Bluetooth access to manage connected devices.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "This app needs Bluetooth to communicate with peripherals.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs your location to display your speed.";
+				INFOPLIST_KEY_CFBundleDisplayName = "Foil Assist";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connect directly to your VESC to display ride telemetry.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Read telemetry from your VESC foil assist controller.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Use GPS for water speed and ride distance.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -332,10 +371,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = example.com.MyWatchOSApp.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grantknight.vescfoil.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "MyWatchOSApp Watch App/MyWatchOSApp Watch App-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -354,14 +393,14 @@
 				CODE_SIGN_ENTITLEMENTS = "MyWatchOSApp Watch App/MyWatchOSApp Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3FLFYUG2Z6;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "MyWatchOSApp-Watch-App-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Foiling VESC Stats";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app needs Bluetooth access to manage connected devices.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "This app needs Bluetooth to communicate with peripherals.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs your location to display your speed.";
+				INFOPLIST_KEY_CFBundleDisplayName = "Foil Assist";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Connect directly to your VESC to display ride telemetry.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Read telemetry from your VESC foil assist controller.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Use GPS for water speed and ride distance.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKWatchOnly = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -369,10 +408,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = example.com.MyWatchOSApp.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grantknight.vescfoil.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "MyWatchOSApp Watch App/MyWatchOSApp Watch App-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -387,10 +426,10 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3FLFYUG2Z6;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_KEY_CFBundleDisplayName = MyWatchOSApp;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = example.com.MyWatchOSApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grantknight.vescfoil;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -402,16 +441,58 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3FLFYUG2Z6;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_KEY_CFBundleDisplayName = MyWatchOSApp;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = example.com.MyWatchOSApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grantknight.vescfoil;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
+		};
+		F01100000000000000000018 /* Debug */ = {
+			isa = XCBuildConfiguration; buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = FoilingComplication/FoilingComplication.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FoilingComplication/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Foil Assist";
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grantknight.vescfoil.watchkitapp.complication;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			}; name = Debug;
+		};
+		F01100000000000000000019 /* Release */ = {
+			isa = XCBuildConfiguration; buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = FoilingComplication/FoilingComplication.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FoilingComplication/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Foil Assist";
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grantknight.vescfoil.watchkitapp.complication;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			}; name = Release;
 		};
 /* End XCBuildConfiguration section */
 
@@ -443,6 +524,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		F01100000000000000000017 /* Widget configuration list */ = {isa = XCConfigurationList; buildConfigurations = (F01100000000000000000018, F01100000000000000000019, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = AE9B9A102E1E264A00640823 /* Project object */;

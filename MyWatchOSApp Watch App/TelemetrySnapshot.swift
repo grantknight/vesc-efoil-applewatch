@@ -1,57 +1,36 @@
-//
-//  TelemetrySnapshot.swift
-//  MyWatchOSApp Watch App
-//
-//  Persists latest telemetry for in-app dashboard and future WidgetKit complications.
-//
-
 import Foundation
 
+/// Shared between the watch app and WidgetKit extension, with no app-only dependencies.
 struct TelemetrySnapshot: Codable {
-    var speed: Double = 0
-    var speedUnit: String = "mph"
+    static let appGroup = "group.com.grantknight.vescfoil"
+    static let widgetKind = "FoilingTelemetryWidget"
+    // Complications show explicitly cached readings; foreground live freshness is 6 seconds.
+    static let staleInterval: TimeInterval = 60
+    var speed: Double?
+    var speedUnit = "mph"
     var watts: Double = 0
-    var batteryPercent: Double = 0
+    var batteryPercent: Double?
     var batteryVoltage: Double = 0
     var mosTempC: Double = 0
     var motorTempC: Double = 0
-    var isConnected: Bool = false
+    var isConnected = false
+    /// Time of the validated primary telemetry sample, never a view refresh time.
     var updatedAt: Date = .distantPast
+    private static let storageKey = "TELEMETRY_SNAPSHOT_V2"
 
-    private static let storageKey = "TELEMETRY_SNAPSHOT"
-
-    static func load() -> TelemetrySnapshot {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let snapshot = try? JSONDecoder().decode(TelemetrySnapshot.self, from: data) else {
-            return TelemetrySnapshot()
-        }
+    func isFresh(at date: Date = .now) -> Bool {
+        let age = date.timeIntervalSince(updatedAt)
+        return isConnected && age >= 0 && age < Self.staleInterval
+    }
+    static func load() -> Self {
+        guard let defaults = UserDefaults(suiteName: appGroup),
+              let data = defaults.data(forKey: storageKey),
+              let snapshot = try? JSONDecoder().decode(Self.self, from: data) else { return Self() }
         return snapshot
     }
-
     func save() {
-        if let data = try? JSONEncoder().encode(self) {
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
-        }
-    }
-}
-
-enum TelemetryPublisher {
-    static func publish(
-        rt: VESCRtStats,
-        speed: Double,
-        speedUnit: GPSSpeedUnit,
-        isConnected: Bool
-    ) {
-        var snapshot = TelemetrySnapshot()
-        snapshot.speed = speed
-        snapshot.speedUnit = speedUnit.rawValue
-        snapshot.watts = rt.instantWatts
-        snapshot.batteryPercent = rt.batteryPercent
-        snapshot.batteryVoltage = rt.batteryVoltage
-        snapshot.mosTempC = rt.mosTemperature
-        snapshot.motorTempC = rt.motorTemperature
-        snapshot.isConnected = isConnected
-        snapshot.updatedAt = Date()
-        snapshot.save()
+        guard let defaults = UserDefaults(suiteName: Self.appGroup),
+              let data = try? JSONEncoder().encode(self) else { return }
+        defaults.set(data, forKey: Self.storageKey)
     }
 }

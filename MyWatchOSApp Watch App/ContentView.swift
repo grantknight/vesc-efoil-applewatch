@@ -1,138 +1,87 @@
-//
-//  ContentView.swift
-//  MyWatchOSApp Watch App
-//
-
 import SwiftUI
 import MapKit
 import CoreLocation
 
-func secondsToHoursMinutesSeconds(_ seconds: Int) -> (Int, Int, Int) {
-    (seconds / 3600, (seconds % 3600) / 60, (seconds % 3600) % 60)
-}
-
 struct ContentView: View {
-    @StateObject private var bluetoothManager = BluetoothManager()
+    @StateObject private var bluetoothManager = BluetoothManager(
+        startBluetooth: !ProcessInfo.processInfo.arguments.contains("--demo")
+    )
+    @State private var showDemo = ProcessInfo.processInfo.arguments.contains("--demo")
+    @State private var showHistory = false
 
     var body: some View {
-        switch bluetoothManager.state {
-        case .start:
-            Hello()
-        case .scanning, .scanningIdle:
-            Scan(bluetoothManager: bluetoothManager)
-        case .connecting:
-            Connect(bluetoothManager: bluetoothManager)
-        case .off:
-            BTOff()
-        default:
-            Home(bluetoothManager: bluetoothManager)
-        }
-    }
-}
-
-struct Hello: View {
-    var body: some View {
-        Text("Initializing...")
-    }
-}
-
-struct BTOff: View {
-    var body: some View {
-        ZStack {
-            Color.red.opacity(0.15)
-                .ignoresSafeArea()
-
-            VStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.red)
-                    .font(.system(size: 24))
-                    .symbolEffect(.pulse, options: .repeating)
-
-                Text("Bluetooth Error")
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundColor(.red)
-
-                Text("App has no access to Bluetooth!")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
+        Group {
+            if showDemo {
+                DemoWatchView { showDemo = false }
+            } else if bluetoothManager.state == .connected {
+                Home(bluetoothManager: bluetoothManager, showDemo: $showDemo)
+            } else {
+                ConnectionScreen(bluetoothManager: bluetoothManager, showDemo: $showDemo, showHistory: $showHistory)
             }
-            .padding(.horizontal, 8)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $showHistory) { RideHistoryView(logger: SessionLogger.shared) }
+        .onChange(of: showDemo) { _, enabled in bluetoothManager.setDemoMode(enabled) }
     }
+
 }
 
-struct Scan: View {
+private struct ConnectionScreen: View {
     @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject private var logger = SessionLogger.shared
+    @Binding var showDemo: Bool
+    @Binding var showHistory: Bool
 
     var body: some View {
-        VStack {
-            Text("Device list")
-            Spacer()
-            List {
-                ForEach(bluetoothManager.peripherals, id: \.identifier) { peripheral in
-                    if let name = peripheral.name {
-                        Button {
-                            bluetoothManager.connectPeripheral(peripheral: peripheral)
-                        } label: {
-                            Text(name)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.gray)
-                                .cornerRadius(10)
+        NavigationStack {
+                    List {
+                        Section {
+                            Label(connectionTitle, systemImage: "antenna.radiowaves.left.and.right")
+                                .foregroundStyle(.cyan)
+                            Text(connectionDetail).font(.caption).foregroundStyle(.secondary)
+                            if bluetoothManager.state == .connecting { ProgressView() }
+                            ForEach(bluetoothManager.peripherals, id: \.identifier) { peripheral in
+                                Button(peripheral.name ?? "VESC device") {
+                                    bluetoothManager.connectPeripheral(peripheral: peripheral)
+                                }
+                            }
+                            if bluetoothManager.state != .off {
+                                Button(bluetoothManager.state == .connecting ? "Cancel connection" : "Scan again") {
+                                    bluetoothManager.restart(withNewDevice: bluetoothManager.state == .connecting)
+                                }
+                            }
+                        }
+                        Section("Your rides") {
+                            if let error = logger.storageError {
+                                Text(error).font(.caption2).foregroundStyle(.orange)
+                                Button("Retry storage") { logger.retryLoad() }
+                            }
+                            if logger.isRecording {
+                                Text("Ride recording · reconnecting").foregroundStyle(.orange).font(.caption)
+                                Button("Save ride") { logger.endRide() }
+                            }
+                            Button("Ride history") { showHistory = true }
+                            Button("Preview app") { showDemo = true }
+                            Text("Preview uses sample data.").font(.caption2).foregroundStyle(.secondary)
                         }
                     }
+                    .navigationTitle("Foil Assist")
                 }
+    }
 
-                if bluetoothManager.state == .scanning {
-                    ProgressView()
-                }
-
-                Button {
-                    bluetoothManager.stopScanning()
-                } label: {
-                    Text("STOP")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                }
-
-                Button {
-                    bluetoothManager.restart()
-                } label: {
-                    Text("REFRESH")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-            }
+    private var connectionTitle: String {
+        switch bluetoothManager.state {
+        case .off: return "Bluetooth unavailable"
+        case .start: return "Starting Bluetooth"
+        case .connecting: return "Connecting to VESC"
+        default: return "Find your VESC"
         }
     }
-}
 
-struct Connect: View {
-    @ObservedObject var bluetoothManager: BluetoothManager
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(bluetoothManager.connectionMessage.isEmpty ? "Connecting..." : bluetoothManager.connectionMessage)
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                .scaleEffect(2.0, anchor: .center)
-            Button("Cancel...") {
-                bluetoothManager.restart(withNewDevice: true)
-            }
+    private var connectionDetail: String {
+        switch bluetoothManager.state {
+        case .off: return "Enable Bluetooth and allow access in Watch Settings."
+        case .connecting: return bluetoothManager.connectionMessage.isEmpty ? "Keep your Watch near the controller." : bluetoothManager.connectionMessage
+        default: return "Power on the controller and select its Bluetooth device below."
         }
     }
 }
@@ -140,227 +89,127 @@ struct Connect: View {
 struct Home: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject private var rtStats: VESCRtStats
-    @ObservedObject private var sessionStats: VESCStats
-
-    @State private var crownOffset: Double = 0
+    @ObservedObject private var logger = SessionLogger.shared
+    @Binding var showDemo: Bool
     @State private var tabSelected = 0
-    @State private var crownCounter: Double = 0
     @State private var isSettingsPresented = false
-    @State private var smoothedEta: TimeInterval?
-
+    @State private var showHistory = false
+    @State private var confirmSave = false
     @StateObject private var locationManager = LocationManager()
     @StateObject private var destinationManager = DestinationManager()
 
-    private let tabCount = 5
-
-    init(bluetoothManager: BluetoothManager) {
+    init(bluetoothManager: BluetoothManager, showDemo: Binding<Bool>) {
         self.bluetoothManager = bluetoothManager
+        _showDemo = showDemo
         _rtStats = ObservedObject(wrappedValue: bluetoothManager.vescRtStats)
-        _sessionStats = ObservedObject(wrappedValue: bluetoothManager.vescStats)
     }
 
-    private var speedUnit: GPSSpeedUnit {
-        locationManager.getSpeedUnit()
-    }
-
-    private var vescSpeedDisplay: Double {
-        formatVescSpeed(rtStats.vescSpeed, unit: speedUnit)
-    }
-
-    /// Prefer the higher of VESC wheel speed and GPS when GPS is enabled.
-    private var displaySpeed: Double {
-        guard locationManager.isEnabled() else { return vescSpeedDisplay }
-        return max(vescSpeedDisplay, locationManager.speed)
-    }
-
-    private var travelSpeedMs: Double {
-        let gpsSpeed = locationManager.isEnabled() ? locationManager.smoothedSpeedMs : 0
-        return max(rtStats.vescSpeed, gpsSpeed)
-    }
-
-    private var destinationDistance: Double? {
-        destinationManager.distance(from: locationManager.currentCoordinate)
-    }
-
-    private var destinationETA: TimeInterval? {
-        smoothedEta
-    }
-
-    private var dashboardArrowAngle: Double? {
-        guard destinationManager.destination != nil else { return nil }
-        return destinationManager.arrowAngle(
-            current: locationManager.currentCoordinate,
-            heading: locationManager.smoothedHeadingDegrees
-        )
-    }
-
-    private var dashboardDistanceText: String? {
-        guard destinationManager.destination != nil else { return nil }
-        return destinationManager.formattedDistance(destinationDistance)
-    }
-
-    private var dashboardEtaText: String? {
-        guard destinationManager.destination != nil else { return nil }
-        return destinationManager.formattedETA(destinationETA)
-    }
-
-    private func refreshSmoothedEta() {
-        smoothedEta = destinationManager.smoothedETA(
-            distanceMeters: destinationDistance,
-            speedMs: travelSpeedMs
-        )
-    }
+    private var speedUnit: GPSSpeedUnit { locationManager.getSpeedUnit() }
+    private var displaySpeed: Double { locationManager.hasFreshSpeed ? locationManager.speed : 0 }
+    private var travelSpeedMs: Double { locationManager.hasFreshSpeed ? locationManager.smoothedSpeedMs : 0 }
 
     var body: some View {
         TabView(selection: $tabSelected) {
-            DashboardView(
-                rtStats: rtStats,
-                displaySpeed: displaySpeed,
-                speedUnit: speedUnit,
-                connectionMessage: bluetoothManager.connectionMessage,
-                destinationArrowAngle: dashboardArrowAngle,
-                destinationDistanceText: dashboardDistanceText,
-                destinationEtaText: dashboardEtaText
-            )
-            .tag(0)
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                DashboardView(
+                    rtStats: rtStats, displaySpeed: displaySpeed, speedUnit: speedUnit,
+                    speedAvailable: locationManager.hasFreshSpeed,
+                    connectionMessage: bluetoothManager.connectionMessage,
+                    isRecording: logger.isRecording, now: timeline.date
+                )
+            }.tag(0)
 
-            ZStack {
-                Color.blue.opacity(0.1)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 3) {
-                    Image(systemName: "waveform")
-                        .foregroundColor(.red)
-                        .font(.system(size: 18))
-
-                    Text("Speed: \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)")
-                    Text("Power: \(String(format: "%.0f", rtStats.instantWatts)) W")
-                    Text("Battery: \(String(format: "%.0f", rtStats.batteryPercent))% · \(String(format: "%.1f", rtStats.batteryVoltage)) V")
-                    Text("MOS: \(String(format: "%.1f", rtStats.mosTemperature))°  Motor: \(String(format: "%.1f", rtStats.motorTemperature))°")
-                    Text("RPM: \(String(format: "%.0f", rtStats.rpm))  A: \(String(format: "%.1f", rtStats.inputCurrent))")
-                    Text(destinationManager.formattedDistance(destinationDistance))
-                    Text(destinationManager.formattedETA(destinationETA))
-
-                    let lag = rtStats.timeSinceLastUpdate
-                    Text(lag < 3600 ? "Lag: \(String(format: "%.0f", lag))s" : "Lag: —")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Controller").font(.headline).foregroundStyle(.cyan)
+                        if !rtStats.isFresh(now: timeline.date) {
+                            Label("Telemetry unavailable", systemImage: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
+                        detail("Battery", rtStats.isFresh(now: timeline.date) ? String(format: "%.1f V", rtStats.batteryVoltage) : "—")
+                        detail("Input current", rtStats.isFresh(now: timeline.date) ? String(format: "%.1f A", rtStats.inputCurrent) : "—")
+                        detail("Motor RPM", rtStats.isFresh(now: timeline.date) ? String(format: "%.0f", rtStats.rpm) : "—")
+                        Text("GPS reports ground speed. Motor RPM is not travel speed.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }.padding(.horizontal, 8)
                 }
-                .font(.caption)
-                .padding()
-            }
-            .tag(1)
+            }.tag(1)
 
-            ZStack {
-                Color.purple.opacity(0.1)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 3) {
-                    Image(systemName: "chart.bar.fill")
-                        .foregroundColor(.purple)
-                        .font(.system(size: 18))
-
-                    let (h, m, s) = secondsToHoursMinutesSeconds(Int(sessionStats.runTime))
-                    Text("Run: \(String(format: "%02d", h)):\(String(format: "%02d", m)):\(String(format: "%02d", s))")
-                    Text("Power avg/max: \(String(format: "%.0f", sessionStats.avgPower))/\(String(format: "%.0f", sessionStats.maxPower)) W")
-                    Text("Current avg/max: \(String(format: "%.1f", sessionStats.avgCurrent))/\(String(format: "%.1f", sessionStats.maxCurrent)) A")
-                    Text("MOS avg/max: \(String(format: "%.1f", sessionStats.avgMosTemperature))/\(String(format: "%.1f", sessionStats.maxMosTemperature))°")
-                    Text("Wh: \(String(format: "%.1f", rtStats.wattHours))")
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Your ride").font(.headline).foregroundStyle(.cyan)
+                        if let ride = logger.activeRide {
+                            Text("RECORDING").font(.caption2.bold()).foregroundStyle(.red)
+                            detail("Duration", rideDuration(ride.duration))
+                            detail("GPS distance", String(format: "%.2f km", ride.distanceMeters / 1000))
+                            detail("Energy used", String(format: "%.1f Wh", ride.energyWh))
+                            detail("Peak power", String(format: "%.0f W", ride.maxWatts))
+                            Button("Save ride") { confirmSave = true }.tint(.cyan)
+                            Text("Recording pauses telemetry during connection gaps.").font(.caption2).foregroundStyle(.secondary)
+                        } else {
+                            Text("Ready when you are.").font(.caption).foregroundStyle(.secondary)
+                            Button("Start ride") { logger.startRide() }
+                                .disabled(!rtStats.isFresh())
+                                .tint(.cyan)
+                            Text("Start after live telemetry arrives. Ride data saves on this Watch.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        if let error = logger.storageError {
+                            Text(error).font(.caption2).foregroundStyle(.orange)
+                            Button("Retry storage") { logger.retryLoad() }
+                        }
+                        Button("Ride history") { showHistory = true }
+                    }.padding(.horizontal, 8)
                 }
-                .font(.caption)
-                .padding()
-            }
-            .tag(2)
+            }.tag(2)
 
-            NavigationTabView(
-                locationManager: locationManager,
-                destinationManager: destinationManager,
-                speedUnit: speedUnit,
-                displaySpeed: displaySpeed,
-                travelSpeedMs: travelSpeedMs,
-                smoothedEta: destinationETA
-            )
-            .tag(3)
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                NavigationTabView(
+                    locationManager: locationManager, destinationManager: destinationManager,
+                    speedUnit: speedUnit, displaySpeed: displaySpeed,
+                    travelSpeedMs: travelSpeedMs, smoothedEta: nil
+                )
+            }.tag(3)
 
-            ZStack {
-                Color.green.opacity(0.1)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 8) {
-                    Text(rtStats.isConnected ? "VESC connected" : "Not connected")
-                        .font(.caption)
-                    Button("Settings") {
-                        isSettingsPresented = true
-                    }
-                    .font(.caption)
-                }
-            }
-            .tag(4)
-        }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(
-                locationManager: locationManager,
-                bluetoothManager: bluetoothManager,
-                destinationManager: destinationManager
-            )
+            ScrollView {
+                VStack(spacing: 10) {
+                    Label("Foil Assist", systemImage: "water.waves").font(.headline).foregroundStyle(.cyan)
+                    Button("Settings") { isSettingsPresented = true }
+                    Button("Ride history") { showHistory = true }
+                    Button("Preview app") { showDemo = true }
+                    Text("Read-only telemetry. Configure your battery before riding.").font(.caption2).foregroundStyle(.secondary)
+                }.padding(.horizontal, 8)
+            }.tag(4)
         }
         .tabViewStyle(.page)
-        .focusable()
-        .digitalCrownRotation(
-            detent: $crownOffset,
-            from: 0,
-            through: 1,
-            by: 0.01,
-            sensitivity: .medium,
-            isContinuous: true,
-            onChange: { crownEvent in
-                crownCounter += crownEvent.velocity
-                if crownCounter > 10 {
-                    crownCounter = 10
-                    if tabSelected < tabCount - 1 {
-                        tabSelected += 1
-                    }
-                }
-                if crownCounter < 0 {
-                    crownCounter = 0
-                    if tabSelected > 0 {
-                        tabSelected -= 1
-                    }
-                }
-            }
-        )
-        .onChange(of: locationManager.speed) { _, _ in
-            bluetoothManager.publishTelemetrySnapshot(
-                displaySpeed: displaySpeed,
-                speedUnit: speedUnit
-            )
-            refreshSmoothedEta()
+        .sheet(isPresented: $showHistory) { RideHistoryView(logger: logger) }
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager, destinationManager: destinationManager)
         }
-        .onChange(of: locationManager.currentCoordinate?.latitude ?? 0) { _, _ in
-            bluetoothManager.publishTelemetrySnapshot(
-                displaySpeed: displaySpeed,
-                speedUnit: speedUnit
-            )
-            refreshSmoothedEta()
-        }
-        .onChange(of: locationManager.currentCoordinate?.longitude ?? 0) { _, _ in
-            refreshSmoothedEta()
-        }
-        .onChange(of: rtStats.vescSpeed) { _, _ in
-            refreshSmoothedEta()
-        }
-        .onChange(of: locationManager.smoothedSpeedMs) { _, _ in
-            refreshSmoothedEta()
-        }
-        .onChange(of: destinationManager.destination?.latitude ?? 0) { _, _ in
-            refreshSmoothedEta()
-        }
-        .onChange(of: destinationManager.destination?.longitude ?? 0) { _, _ in
-            refreshSmoothedEta()
-        }
+        .alert("Save this ride?", isPresented: $confirmSave) {
+            Button("Save ride") { logger.endRide() }
+            Button("Keep recording", role: .cancel) {}
+        } message: { Text("Finish recording and keep this ride in history.") }
         .onAppear {
-            refreshSmoothedEta()
+            if locationManager.isEnabled() { locationManager.start() }
+            bluetoothManager.gpsSpeedProvider = { [weak locationManager] in
+                guard let locationManager, locationManager.hasFreshSpeed else { return nil }
+                return locationManager.smoothedSpeedMs
+            }
         }
+        .onDisappear {
+            locationManager.stop()
+            bluetoothManager.gpsSpeedProvider = nil
+        }
+        .onChange(of: locationManager.speed) { _, _ in
+            bluetoothManager.publishTelemetrySnapshot(displaySpeed: displaySpeed, speedUnit: speedUnit)
+        }
+    }
+
+    private func detail(_ name: String, _ value: String) -> some View {
+        HStack { Text(name).foregroundStyle(.secondary); Spacer(); Text(value).monospacedDigit() }.font(.caption)
     }
 }
 
@@ -388,23 +237,24 @@ struct NavigationTabView: View {
                 }
                 .padding()
             } else {
-                let distance = destinationManager.distance(from: locationManager.currentCoordinate)
+                let freshCoordinate = locationManager.hasFreshLocation ? locationManager.currentCoordinate : nil
+                let distance = destinationManager.distance(from: freshCoordinate)
                 let eta = destinationManager.etaSeconds(distanceMeters: distance, speedMs: travelSpeedMs)
                 let arrowAngle = destinationManager.arrowAngle(
-                    current: locationManager.currentCoordinate,
-                    heading: locationManager.smoothedHeadingDegrees
-                ) ?? 0
+                    current: freshCoordinate,
+                    heading: locationManager.hasFreshHeading ? locationManager.smoothedHeadingDegrees : nil
+                )
 
                 VStack(spacing: 4) {
                     Text(destinationManager.destinationName)
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
-                    Image(systemName: "location.north.fill")
+                    Image(systemName: arrowAngle == nil ? "location.slash" : "location.north.fill")
                         .font(.system(size: 44, weight: .bold))
                         .foregroundColor(.cyan)
-                        .rotationEffect(.degrees(arrowAngle))
-                        .animation(.easeInOut(duration: 0.2), value: arrowAngle)
+                        .rotationEffect(.degrees(arrowAngle ?? 0))
+                        .animation(.easeInOut(duration: 0.2), value: arrowAngle ?? 0)
 
                     Text(destinationManager.formattedDistance(distance))
                         .font(.caption)
@@ -412,7 +262,7 @@ struct NavigationTabView: View {
                         .font(.caption)
                         .fontWeight(.semibold)
 
-                    Text("Speed: \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)")
+                    Text(locationManager.hasFreshSpeed ? "GPS: \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)" : "GPS speed unavailable")
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
@@ -423,6 +273,8 @@ struct NavigationTabView: View {
                         }
                         .font(.caption2)
                     }
+                    Text(arrowAngle == nil ? "Waiting for GPS / heading" : "Straight-line guidance")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 6)
             }
@@ -576,6 +428,8 @@ struct SettingsView: View {
                 }
 
                 Section("Battery") {
+                    Text("Battery % is an estimate. Configure this for your pack.")
+                        .font(.caption2).foregroundStyle(.secondary)
                     Toggle("Use VESC battery %", isOn: $useVescBattery)
                         .onChange(of: useVescBattery) { _, v in
                             BatteryConfig.useVescBatteryLevel = v

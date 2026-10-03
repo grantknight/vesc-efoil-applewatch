@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Combine
 import CoreLocation
 
 private struct StoredDestination: Codable {

@@ -15,6 +15,8 @@ class Packet {
     private var bytesLeft: Int = 0
     private let bufferLen: Int
     private var rxBuffer: [UInt8]
+    private var lastReceiveTime: TimeInterval?
+    private let fragmentTimeout: TimeInterval
     
     // Callbacks for data events
     var packetReceived: ((Data) -> Void)?
@@ -56,7 +58,8 @@ class Packet {
     ]
     
     // MARK: - Initialization
-    init() {
+    init(fragmentTimeout: TimeInterval = 1) {
+        self.fragmentTimeout = max(0, fragmentTimeout)
         bufferLen = maxPacketLen + 8
         rxBuffer = [UInt8](repeating: 0, count: bufferLen)
     }
@@ -71,10 +74,6 @@ class Packet {
         
         guard !data.isEmpty, data.count <= maxPacketLen else {
             return toSend
-        }
-        
-        if DEBUG {
-            print("Preparing packet: \(data.hexEncodedString(upperCase: true))")
         }
         
         let lenTot = data.count
@@ -106,9 +105,15 @@ class Packet {
         rxReadPtr = 0
         rxWritePtr = 0
         bytesLeft = 0
+        lastReceiveTime = nil
     }
     
-    func processData(data: Data) {
+    func processData(data: Data, at uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        guard !data.isEmpty else { return }
+        if let lastReceiveTime, uptime < lastReceiveTime || uptime - lastReceiveTime > fragmentTimeout {
+            resetState()
+        }
+        lastReceiveTime = uptime
         var decodedPackets: [Data] = []
         
         //print("Packet: packetReceived start")
@@ -228,13 +233,13 @@ class Packet {
         } else if isLen16b {
             len = (Int(buffer[1]) << 8) | Int(buffer[2])
             // A shorter packet should use less length bytes
-            guard len >= 255 else {
+            guard len > 255 else {
                 return -1
             }
         } else if isLen24b {
             len = (Int(buffer[1]) << 16) | (Int(buffer[2]) << 8) | Int(buffer[3])
             // A shorter packet should use less length bytes
-            guard len >= 65535 else {
+            guard len > 65535 else {
                 return -1
             }
         }
