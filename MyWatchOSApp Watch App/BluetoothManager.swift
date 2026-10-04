@@ -306,13 +306,15 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
             vescRtStats.updateStats(batteryVoltage: values.voltage, inputCurrent: values.inputCurrent,
                 mosTemperature: values.controllerTemperature, motorTemperature: values.motorTemperature,
                 wattHours: values.wattHours, rpm: values.rpm)
-            vescRtStats.markTelemetryReceived()
+            let receivedAt = Date()
+            vescRtStats.updateFaultCode(values.faultCode, at: receivedAt)
+            vescRtStats.markTelemetryReceived(at: receivedAt)
             if !BatteryConfig.useVescBatteryLevel,
                UserDefaults.standard.object(forKey: "BATTERY_CELL_COUNT") != nil,
                let voltage = values.voltage {
                 vescRtStats.updateBatteryPercent(BatteryConfig.percent(fromVoltage: voltage), source: .voltageEstimate)
             }
-            lastTelemetryAt = Date()
+            lastTelemetryAt = receivedAt
             sessionLogger.connectionChanged(isConnected: true)
             wasFresh = true
             connectionMessage = ""
@@ -344,7 +346,8 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         snapshot.batteryPercent = vescRtStats.batteryPercentIsAvailable ? vescRtStats.batteryPercent : nil
         snapshot.batteryVoltage = vescRtStats.batteryVoltage
         snapshot.mosTempC = vescRtStats.mosTemperature
-        snapshot.motorTempC = vescRtStats.motorTemperature
+        snapshot.motorTempC = vescRtStats.motorTemperature // Legacy cache field; not displayed.
+        snapshot.faultCode = vescRtStats.faultCode
         snapshot.isConnected = state == .connected
         snapshot.updatedAt = lastTelemetryAt ?? .distantPast
         snapshot.save()
@@ -370,7 +373,7 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         vescTimerCounter &+= 1
         var vb = VByteArray()
         vb.vbAppendUInt8(VescCommand.getValuesSelective)
-        let mask: UInt32 = (1 << 11) | (1 << 8) | (1 << 7) | (1 << 3) | (1 << 1) | (1 << 0)
+        let mask: UInt32 = (1 << 15) | (1 << 11) | (1 << 8) | (1 << 7) | (1 << 3) | (1 << 0)
         vb.vbAppendUInt32(mask)
         sendData(data: vb.data)
         vb = VByteArray()

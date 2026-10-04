@@ -1,6 +1,6 @@
 import SwiftUI
+import CoreLocation
 
-/// Critical glance sized for the smallest supported Watch.
 struct DashboardView: View {
     @ObservedObject var rtStats: VESCRtStats
     let displaySpeed: Double
@@ -10,60 +10,91 @@ struct DashboardView: View {
     let isRecording: Bool
     let now: Date
     var usesSampleData = false
+    var directionAngle: Double? = nil
+    var directionReference = "Direction unavailable"
+    var navigationSummary = "Tap arrow to choose destination"
+    var reserveSummary = "Reserve 20% · estimate unavailable"
+    var reserveWarning = false
+    var onDestinationTap: () -> Void = {}
 
+    private let sportColor = Color(red: 0.48, green: 0.96, blue: 0.69)
     private var fresh: Bool { usesSampleData ? rtStats.isConnected : rtStats.isFresh(now: now) }
-    private var batteryAvailable: Bool {
-        usesSampleData ? rtStats.batteryPercentSource == .demo : rtStats.batteryPercentIsAvailable
-    }
-    private var statusLabel: String {
+    private var batteryAvailable: Bool { usesSampleData ? rtStats.batteryPercentSource == .demo : rtStats.batteryPercentIsAvailable }
+    private var faultAvailable: Bool { fresh && (usesSampleData ? rtStats.faultCode != nil : rtStats.faultIsAvailable(now: now)) }
+    private var activeFault: UInt8? { faultAvailable ? rtStats.faultCode.flatMap { $0 == 0 ? nil : $0 } : nil }
+    private var status: String {
         if usesSampleData { return fresh ? "SAMPLE" : "SAMPLE GAP" }
         return fresh ? "LIVE" : (rtStats.isConnected ? "STALE DATA" : "RECONNECTING")
     }
 
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Circle().fill(fresh ? Color.cyan : Color.orange).frame(width: 5, height: 5)
-                    Text(statusLabel)
-                        .font(.system(size: 10, weight: .bold)).foregroundStyle(fresh ? Color.cyan : Color.orange)
+            let compact = geometry.size.height < 190
+            VStack(spacing: compact ? 2 : 4) {
+                HStack {
+                    Text("● \(status)").font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(fresh ? sportColor : .orange)
                     Spacer()
-                    if isRecording {
-                        Label("REC", systemImage: "record.circle.fill")
-                            .font(.system(size: 10, weight: .bold)).foregroundStyle(.red)
-                    }
-                }.accessibilityElement(children: .combine)
-                Text(speedAvailable ? String(format: "%.1f", displaySpeed) : "—")
-                    .font(.system(size: min(geometry.size.height * 0.23, 48), weight: .bold, design: .rounded))
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-                    .accessibilityLabel(speedAvailable ? "GPS speed \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)" : "GPS speed unavailable")
-                Text(speedAvailable ? "GPS · \(speedUnit.rawValue)" : "GPS unavailable")
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    metric("POWER", value: fresh ? String(format: "%.0f", rtStats.instantWatts) : "—", unit: "W")
-                    metric("BATTERY", value: fresh && batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "% est.")
-                }.padding(.top, 2)
-                HStack(spacing: 8) {
-                    metric("CTRL", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C")
-                    metric("MOTOR", value: fresh ? String(format: "%.0f", rtStats.motorTemperature) : "—", unit: "°C")
+                    if isRecording { Text("● REC").font(.system(size: 9, weight: .bold)).foregroundStyle(.red) }
                 }
-                Text(fresh ? String(format: "%.1f V", rtStats.batteryVoltage) + " · " + rtStats.batterySourceLabel : (usesSampleData ? "Sample connection unavailable" : "Waiting for fresh telemetry"))
-                    .font(.system(size: 10)).foregroundStyle(fresh ? Color.secondary : Color.orange)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-            }.padding(.horizontal, 8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity).background(.black)
+                if let code = activeFault {
+                    Text("ESC FAULT \(code) · \(VescFaultCode.label(for: code))")
+                        .font(.system(size: 9, weight: .bold)).foregroundStyle(.red)
+                        .lineLimit(2).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(3).background(.red.opacity(0.14), in: RoundedRectangle(cornerRadius: 5))
+                        .accessibilityIdentifier("esc-fault-warning")
+                }
+                Text(speedAvailable ? String(format: "%.1f", displaySpeed) : "—")
+                    .font(.system(size: min(geometry.size.height * (activeFault == nil ? 0.25 : 0.20), 49), weight: .bold, design: .rounded))
+                    .foregroundStyle(sportColor).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    .accessibilityLabel(speedAvailable ? "GPS ground speed \(String(format: "%.1f", displaySpeed)) \(speedUnit.displayLabel)" : "GPS speed unavailable")
+                HStack(spacing: 6) {
+                    Text(speedAvailable ? "GPS · \(speedUnit.displayLabel)" : "GPS unavailable")
+                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                    Button(action: onDestinationTap) {
+                        VStack(spacing: 0) {
+                        Image(systemName: directionAngle == nil ? "location.circle" : "location.north.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .rotationEffect(.degrees(directionAngle ?? 0))
+                            .foregroundStyle(sportColor)
+                        Text(directionAngle == nil ? "SET" : (directionReference == "GPS course" ? "COURSE" : "COMPASS"))
+                            .font(.system(size: 6, weight: .bold)).foregroundStyle(.secondary)
+                        }.frame(width: 38, height: 29)
+                    }.buttonStyle(.plain)
+                        .accessibilityLabel("Destination setup")
+                        .accessibilityIdentifier("destination-arrow")
+                }
+                HStack(spacing: 6) {
+                    tile("POWER", value: fresh ? String(format: "%.0f", rtStats.instantWatts) : "—", unit: "W", compact: compact)
+                    tile("BATTERY", value: fresh && batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "% est.", compact: compact)
+                }
+                HStack(spacing: 5) {
+                    Text(fresh ? String(format: "ESC %.0f°C", rtStats.mosTemperature) : "ESC —")
+                        .foregroundStyle(.white)
+                    Text(faultAvailable ? (rtStats.faultCode == 0 ? "· No fault" : "· Fault") : "· Fault status —")
+                        .foregroundStyle(faultAvailable && rtStats.faultCode == 0 ? Color.secondary : .orange)
+                }.font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(fresh ? String(format: "%.1f V", rtStats.batteryVoltage) + " · " + rtStats.batterySourceLabel : "Waiting for fresh telemetry")
+                    .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                VStack(spacing: 1) {
+                    Text(navigationSummary).foregroundStyle(sportColor)
+                    Text(reserveSummary).foregroundStyle(reserveWarning ? Color.orange : Color.secondary)
+                }.font(.system(size: 9, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
+            }.padding(.horizontal, 6).frame(maxWidth: .infinity, maxHeight: .infinity).background(.black)
         }
     }
 
-    private func metric(_ title: String, value: String, unit: String) -> some View {
+    private func tile(_ label: String, value: String, unit: String, compact: Bool) -> some View {
         VStack(spacing: 1) {
-            Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            Text(label).font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.system(size: 21, weight: .semibold, design: .rounded)).monospacedDigit()
-                Text(unit).font(.system(size: 9)).foregroundStyle(.secondary)
+                Text(value).font(.system(size: compact ? 21 : 26, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(unit).font(.system(size: 8)).foregroundStyle(.secondary)
             }.lineLimit(1).minimumScaleFactor(0.65)
-        }.frame(maxWidth: .infinity)
-            .accessibilityElement(children: .ignore).accessibilityLabel("\(title) \(value) \(unit)")
+        }.frame(maxWidth: .infinity).padding(.vertical, compact ? 3 : 5)
+            .background(sportColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+            .accessibilityElement(children: .ignore).accessibilityLabel("\(label) \(value) \(unit)")
     }
 }
 
@@ -71,8 +102,26 @@ struct DashboardView: View {
 struct DemoWatchView: View {
     let onExit: () -> Void
     @StateObject private var stats = VESCRtStats()
-    @State private var tab = 0
+    @StateObject private var destinationManager = DestinationManager(persists: false)
+    @State private var tab = ProcessInfo.processInfo.arguments.contains("--demo-navigation") ? 2 : 0
     @State private var simulateGap = false
+    @State private var simulateFault = ProcessInfo.processInfo.arguments.contains("--demo-fault")
+    @State private var showDestination = ProcessInfo.processInfo.arguments.contains("--demo-destination")
+    private let sampleCoordinate = CLLocationCoordinate2D(latitude: 37.775, longitude: -122.4194)
+    @State private var sampleEstimator = ArrivalBatteryEstimator()
+    @State private var fixtureTime = Date()
+    @State private var pointsInitialized = false
+    private var lowBatteryFixture: Bool { ProcessInfo.processInfo.arguments.contains("--demo-navigation") }
+    private var samplePrediction: ArrivalBatteryPrediction? {
+        guard !simulateGap else { return nil }
+        return sampleEstimator.prediction(etaSeconds: 180, reservePercent: destinationManager.reservePercent, now: fixtureTime)
+    }
+    private var sampleReserveSummary: String {
+        guard let prediction = samplePrediction else { return "Arrival estimate unavailable" }
+        if prediction.willExhaustBeforeArrival { return "Battery may run out before arrival" }
+        if prediction.reserveShortfallPercent > 0 { return String(format: "Reserve short by %.0f%% · est.", ceil(prediction.reserveShortfallPercent)) }
+        return String(format: "Arrival ~%.0f%% · reserve %.0f%%", prediction.arrivalPercent, destinationManager.reservePercent)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -85,7 +134,12 @@ struct DemoWatchView: View {
             TabView(selection: $tab) {
                 DashboardView(rtStats: stats, displaySpeed: 18.4, speedUnit: .kph,
                               speedAvailable: true, connectionMessage: "", isRecording: true,
-                              now: Date(), usesSampleData: true).tag(0)
+                              now: Date(), usesSampleData: true,
+                              directionAngle: destinationManager.arrowAngle(current: sampleCoordinate, heading: 0), directionReference: "GPS course",
+                              navigationSummary: destinationManager.destinationName + " · 920 m · 03:00",
+                              reserveSummary: sampleReserveSummary,
+                              reserveWarning: (samplePrediction?.reserveShortfallPercent ?? 0) > 0,
+                              onDestinationTap: { showDestination = true }).tag(0)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("Sample ride").font(.headline).foregroundStyle(.cyan)
@@ -97,17 +151,14 @@ struct DemoWatchView: View {
                         Button(simulateGap ? "Restore sample connection" : "Simulate disconnect") {
                             simulateGap.toggle(); loadSample()
                         }
+                        Button(simulateFault ? "Clear sample ESC fault" : "Simulate ESC fault") {
+                            simulateFault.toggle(); loadSample()
+                        }
                     }.font(.caption).padding(.horizontal, 8)
                 }.tag(1)
-                ScrollView {
-                    VStack(spacing: 7) {
-                        Text("Sample destination").font(.caption).foregroundStyle(.secondary)
-                        Image(systemName: "location.north.fill").font(.system(size: 42)).rotationEffect(.degrees(35)).foregroundStyle(.cyan)
-                        Text("850 m").font(.title3.bold())
-                        Text("Est. arrival 02:46").font(.caption)
-                        Text("Straight-line guidance only.").font(.caption2).foregroundStyle(.secondary)
-                    }
-                }.tag(2)
+                NavigationSummaryView(destinationManager: destinationManager, currentCoordinate: sampleCoordinate,
+                    heading: 0, eta: 180, prediction: samplePrediction,
+                    unavailableReason: "Sample connection gap", directionReference: "GPS course", usesSampleData: true).tag(2)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Sample history").font(.headline).foregroundStyle(.cyan)
@@ -122,11 +173,28 @@ struct DemoWatchView: View {
                 }.tag(3)
             }.tabViewStyle(.page)
         }.onAppear(perform: loadSample)
+            .sheet(isPresented: $showDestination) {
+                DestinationPickerView(destinationManager: destinationManager, currentCoordinate: sampleCoordinate, usesSampleData: true)
+            }
     }
 
     private func loadSample() {
         stats.updateStats(batteryVoltage: 46.8, inputCurrent: 18.2, mosTemperature: 42,
-                          motorTemperature: 48, wattHours: 128.4, rpm: 3450,
-                          batteryPercent: 76, isConnected: !simulateGap)
+                          wattHours: 128.4, rpm: 3450,
+                          batteryPercent: lowBatteryFixture ? 14 : 76, isConnected: !simulateGap)
+        stats.updateFaultCode(simulateFault ? 1 : 0)
+        fixtureTime = Date()
+        sampleEstimator.reset()
+        // Fixed simulation clock makes fixture screenshots deterministic without inventing live packets.
+        for step in 0...45 {
+            let percent = (lowBatteryFixture ? 20.0 : 82.0) - Double(step) * (6.0 / 45.0)
+            sampleEstimator.observe(percent: percent, source: "synthetic fixture", at: fixtureTime.addingTimeInterval(Double(step * 2 - 90)),
+                distanceMeters: 1400 - Double(step) * (480.0 / 45.0), isTelemetryFresh: true)
+        }
+        if !pointsInitialized {
+            pointsInitialized = true
+            destinationManager.setDestination(CLLocationCoordinate2D(latitude: 37.7825, longitude: -122.415), name: "Finish")
+            destinationManager.saveLaunchPoint(CLLocationCoordinate2D(latitude: 37.77, longitude: -122.423), name: "Launch beach")
+        }
     }
 }

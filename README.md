@@ -4,13 +4,15 @@ A standalone SwiftUI watchOS app for read-only VESC telemetry over Bluetooth LE.
 
 ## Features
 
-- Readable dashboard: fresh GPS ground speed, input power, battery percentage/source, voltage and controller/motor temperatures.
+- Sport dashboard: fresh GPS ground speed, input power, battery percentage/source, voltage and ESC temperature. A tappable direction arrow sits beside the GPS speed unit.
+- VESC faults: poll the controller's reported fault code, show a fresh error label and numeric code, and retain unknown firmware codes. A stale link never reports a live all-clear.
 - Protocol validation: framed CRC-checked packets, strict response masks/lengths and invalid-value rejection. Stale telemetry is hidden instead of shown as current.
 - Connection recovery: saved device discovery, notification readiness, bounded retry delays and no-response watchdog.
 - Ride recording: explicit start/save, atomic checkpoints, interrupted-ride recovery, reconnect gaps, observed energy/GPS-distance summaries and confirmed history deletion.
-- Navigation: pinned destination, bearing, straight-line distance and approximate ETA. This is not routed marine navigation.
+- Navigation: independently saved launch/beach and downwind finish, manual decimal coordinates or pan-to-pin Apple Maps, direction, straight-line distance and approximate ETA.
+- Arrival battery: recent observed percentage decline predicts remaining battery at the destination; configurable reserve defaults to 20%. Insufficient, stale or unstable measurements show an unavailable estimate.
 - Complication: shared App Group snapshot with cached-reading expiry; WidgetKit controls update timing.
-- Native demo: launch with `--demo` or use Preview app. Synthetic values never become real ride observations.
+- Native demo: launch with `--demo` or use Preview app. `--demo-navigation`, `--demo-fault` and `--demo-destination` expose additional simulator fixtures. Synthetic values never become real ride observations or saved destination settings.
 
 ## Preview
 
@@ -21,6 +23,14 @@ Open `preview/watch-preview.html` in a browser. Explore the screens, connection 
 Open `MyWatchOSApp.xcodeproj` in Xcode on a Mac, choose the shared **FoilingVESC** scheme and a Watch simulator. For device installation choose your signing team and provision the shared App Group. Complete instructions and the required hardware acceptance checklist are in [MAC_HANDOFF.md](MAC_HANDOFF.md). Complication details are in [WIDGET_SETUP.md](WIDGET_SETUP.md).
 
 Default battery cell count is 14S; that is not a verified description of your pack. Configure it before using voltage-based percentage. VESC-reported battery level also depends on its firmware and configured battery model; it is not necessarily a BMS measurement.
+
+## Destination and arrival reserve
+
+Tap the arrow beside GPS to mark your current launch point, choose the saved beach, enter named decimal latitude/longitude, or pan the map and place its center pin. Launch and finish remain separate when switching targets. Navigation uses straight-line distance and current GPS ground speed; it does not route around land or account for waves, wind or currents.
+
+The native arrival estimate uses a bounded three-minute window of fresh battery observations. It requires at least 60 continuous seconds, eight samples, a 0.5 percentage-point decline, 50 metres of approach and a sufficiently stable trend. Link/GPS gaps, target or battery-source changes discard that trend. Flat, rising, unknown or stale battery percentages produce no prediction. Estimated arrival below the selected reserve is highlighted; projected exhaustion is stated explicitly rather than hidden by clamping to zero. It estimates recent consumption continuing at current ground speed, not a guaranteed remaining range.
+
+Motor temperature is no longer polled or displayed. Legacy ride and snapshot fields remain readable for archive compatibility. Controller fault names can still include motor-related errors reported by VESC firmware.
 
 ## Verification
 

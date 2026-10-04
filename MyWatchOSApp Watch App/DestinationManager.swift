@@ -13,52 +13,91 @@ private struct StoredDestination: Codable {
     let name: String
 }
 
+enum DestinationKind: String, CaseIterable, Identifiable {
+    case finish, launch
+    var id: String { rawValue }
+    var title: String { self == .launch ? "Launch / beach" : "Finish" }
+}
+
 final class DestinationManager: ObservableObject {
-    @Published var destination: CLLocationCoordinate2D?
-    @Published var destinationName: String = "Pinned destination"
+    @Published private(set) var finishCoordinate: CLLocationCoordinate2D?
+    @Published private(set) var finishName = "Finish"
+    @Published private(set) var launchCoordinate: CLLocationCoordinate2D?
+    @Published private(set) var launchName = "Launch / beach"
+    @Published private(set) var destinationKind: DestinationKind = .finish
+    @Published var reservePercent: Double = 20 {
+        didSet {
+            guard reservePercent.isFinite, (0...100).contains(reservePercent) else { reservePercent = oldValue; return }
+            if persists { UserDefaults.standard.set(reservePercent, forKey: "NAV_RESERVE_PERCENT") }
+        }
+    }
+    var destination: CLLocationCoordinate2D? { destinationKind == .launch ? launchCoordinate : finishCoordinate }
+    var destinationName: String { destinationKind == .launch ? launchName : finishName }
 
     private let storageKey = "NAV_DESTINATION"
+    private let launchStorageKey = "NAV_LAUNCH"
+    private let persists: Bool
     private var smoothedEtaSecondsValue: TimeInterval?
 
-    init() {
-        load()
+    init(persists: Bool = true) {
+        self.persists = persists
+        if persists { load() }
     }
 
     func setDestination(_ coordinate: CLLocationCoordinate2D, name: String = "Pinned destination") {
         guard Self.validCoordinate(coordinate) else { return }
-        destination = coordinate
-        destinationName = name
+        finishCoordinate = coordinate
+        finishName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Finish" : name
+        destinationKind = .finish
         smoothedEtaSecondsValue = nil
         save()
     }
 
     func clearDestination() {
-        destination = nil
+        finishCoordinate = nil
+        if destinationKind == .finish { smoothedEtaSecondsValue = nil }
+        if persists { UserDefaults.standard.removeObject(forKey: storageKey); saveSelection() }
+    }
+
+    func saveLaunchPoint(_ coordinate: CLLocationCoordinate2D, name: String = "Launch / beach") {
+        guard Self.validCoordinate(coordinate) else { return }
+        launchCoordinate = coordinate
+        launchName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Launch / beach" : name
+        if destinationKind == .launch { smoothedEtaSecondsValue = nil }
+        savePoint(coordinate, name: launchName, key: launchStorageKey)
+    }
+
+    func selectReturnToLaunch() {
+        guard launchCoordinate != nil else { return }
+        destinationKind = .launch
         smoothedEtaSecondsValue = nil
-        UserDefaults.standard.removeObject(forKey: storageKey)
+        saveSelection()
+    }
+
+    func selectFinish() {
+        guard finishCoordinate != nil else { return }
+        destinationKind = .finish
+        smoothedEtaSecondsValue = nil
+        saveSelection()
+    }
+
+    func clearLaunchPoint() {
+        launchCoordinate = nil
+        if destinationKind == .launch { destinationKind = .finish; smoothedEtaSecondsValue = nil }
+        if persists { UserDefaults.standard.removeObject(forKey: launchStorageKey); saveSelection() }
     }
 
     func distance(from current: CLLocationCoordinate2D?) -> CLLocationDistance? {
         guard let current, let destination,
               Self.validCoordinate(current), Self.validCoordinate(destination) else { return nil }
-        let from = CLLocation(latitude: current.latitude, longitude: current.longitude)
-        let to = CLLocation(latitude: destination.latitude, longitude: destination.longitude)
-        let meters = from.distance(from: to)
-        return meters.isFinite && meters >= 0 ? meters : nil
+        return NavigationEstimate.distanceMeters(from: Self.navigationCoordinate(current), to: Self.navigationCoordinate(destination))
     }
 
     /// Bearing from current point to destination in degrees, normalized 0...360.
     func bearingToDestination(from current: CLLocationCoordinate2D?) -> Double? {
         guard let current, let destination,
               Self.validCoordinate(current), Self.validCoordinate(destination) else { return nil }
-        let lat1 = current.latitude * .pi / 180
-        let lat2 = destination.latitude * .pi / 180
-        let dLon = (destination.longitude - current.longitude) * .pi / 180
-
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let bearing = atan2(y, x) * 180 / .pi
-        return normalizeDegrees(bearing)
+        return NavigationEstimate.bearingDegrees(from: Self.navigationCoordinate(current), to: Self.navigationCoordinate(destination))
     }
 
     /// Arrow rotation where 0 means straight ahead relative to user's heading.
@@ -68,10 +107,7 @@ final class DestinationManager: ObservableObject {
     }
 
     func etaSeconds(distanceMeters: Double?, speedMs: Double) -> TimeInterval? {
-        guard let distanceMeters, distanceMeters.isFinite, distanceMeters > 1,
-              speedMs.isFinite, speedMs > 0.5 else { return nil }
-        let eta = distanceMeters / speedMs
-        return eta.isFinite && eta >= 0 ? eta : nil
+        NavigationEstimate.etaSeconds(distanceMeters: distanceMeters, speedMs: speedMs)
     }
 
     func smoothedETA(distanceMeters: Double?, speedMs: Double) -> TimeInterval? {
@@ -112,29 +148,51 @@ final class DestinationManager: ObservableObject {
     }
 
     private func save() {
-        guard let destination, Self.validCoordinate(destination) else { return }
+        guard let finishCoordinate else { return }
+        savePoint(finishCoordinate, name: finishName, key: storageKey)
+        saveSelection()
+    }
+
+    private func savePoint(_ coordinate: CLLocationCoordinate2D, name: String, key: String) {
+        guard persists, Self.validCoordinate(coordinate) else { return }
         let stored = StoredDestination(
-            latitude: destination.latitude,
-            longitude: destination.longitude,
-            name: destinationName
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            name: name
         )
         guard let data = try? JSONEncoder().encode(stored) else { return }
-        UserDefaults.standard.set(data, forKey: storageKey)
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    private func saveSelection() {
+        if persists { UserDefaults.standard.set(destinationKind.rawValue, forKey: "NAV_TARGET_KIND") }
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
+        if let point = loadPoint(key: storageKey) { finishCoordinate = point.0; finishName = point.1 }
+        if let point = loadPoint(key: launchStorageKey) { launchCoordinate = point.0; launchName = point.1 }
+        if let kind = UserDefaults.standard.string(forKey: "NAV_TARGET_KIND").flatMap(DestinationKind.init(rawValue:)),
+           kind != .launch || launchCoordinate != nil { destinationKind = kind }
+        if let value = UserDefaults.standard.object(forKey: "NAV_RESERVE_PERCENT") as? Double,
+           value.isFinite, (0...100).contains(value) { reservePercent = value }
+    }
+
+    private func loadPoint(key: String) -> (CLLocationCoordinate2D, String)? {
+        guard let data = UserDefaults.standard.data(forKey: key),
               let stored = try? JSONDecoder().decode(StoredDestination.self, from: data) else {
-            return
+            return nil
         }
         let coordinate = CLLocationCoordinate2D(latitude: stored.latitude, longitude: stored.longitude)
-        guard Self.validCoordinate(coordinate) else { return }
-        destination = coordinate
-        destinationName = stored.name
+        guard Self.validCoordinate(coordinate) else { return nil }
+        return (coordinate, stored.name)
     }
 
     private static func validCoordinate(_ coordinate: CLLocationCoordinate2D) -> Bool {
-        coordinate.latitude.isFinite && coordinate.longitude.isFinite && CLLocationCoordinate2DIsValid(coordinate)
+        navigationCoordinate(coordinate).isValid
+    }
+
+    private static func navigationCoordinate(_ coordinate: CLLocationCoordinate2D) -> NavigationCoordinate {
+        NavigationCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
     }
 
     private func normalizeDegrees(_ degrees: Double) -> Double {

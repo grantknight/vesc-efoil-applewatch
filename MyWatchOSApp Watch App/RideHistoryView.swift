@@ -58,7 +58,6 @@ private struct RideDetailView: View {
             row("Peak power", String(format: "%.0f W", ride.maxWatts))
             row("Average power", String(format: "%.0f W", ride.averageWatts))
             row("Peak controller", String(format: "%.0f °C", ride.maxControllerTemperatureC))
-            row("Peak motor", String(format: "%.0f °C", ride.maxMotorTemperatureC))
             row("Connection gaps", "\(ride.disconnectionCount)")
             row("Samples", "\(ride.totalSampleCount)")
             Text("Distance uses valid GPS samples. Gaps are not extrapolated.").font(.caption2).foregroundStyle(.secondary)

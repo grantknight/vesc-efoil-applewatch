@@ -27,6 +27,8 @@ struct FoilingTelemetryWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: FoilingTelemetryEntry
     private var battery: String { entry.snapshot.batteryPercent.map { String(format: "%.0f%%", $0) } ?? "—" }
+    private var fault: String { entry.snapshot.faultLabel(at: entry.date) ?? "Fault status unavailable" }
+    private var hasFault: Bool { entry.snapshot.faultCode.map { $0 != 0 } ?? false }
     var body: some View {
         Group {
             if !entry.isFresh {
@@ -35,10 +37,15 @@ struct FoilingTelemetryWidgetView: View {
             } else {
                 switch family {
                 case .accessoryInline:
-                    Text("Last VESC \(battery) · \(Int(entry.snapshot.watts.rounded())) W")
+                    Text(hasFault ? "Last VESC · \(fault)" : "Last VESC \(battery) · \(Int(entry.snapshot.watts.rounded())) W")
                 case .accessoryCircular:
                     Group {
-                        if let percent = entry.snapshot.batteryPercent {
+                        if hasFault, let code = entry.snapshot.faultCode {
+                            VStack(spacing: 0) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                Text("F\(code)").font(.caption2)
+                            }
+                        } else if let percent = entry.snapshot.batteryPercent {
                             Gauge(value: min(100, max(0, percent)), in: 0...100) {
                                 Image(systemName: "battery.100percent")
                             } currentValueLabel: { Text(battery).font(.caption2) }
@@ -47,17 +54,17 @@ struct FoilingTelemetryWidgetView: View {
                             Text("Battery % unavailable").font(.system(size: 9)).multilineTextAlignment(.center)
                         }
                     }
-                    .widgetLabel { Text("Last VESC reading") }
+                    .widgetLabel { Text(hasFault ? "Last: \(fault)" : "Last VESC reading") }
                 case .accessoryCorner:
-                    Text(battery).font(.headline)
-                        .widgetLabel { Text("\(Int(entry.snapshot.watts.rounded())) W · VESC") }
+                    Text(hasFault ? "F\(entry.snapshot.faultCode ?? 0)" : battery).font(.headline)
+                        .widgetLabel { Text(hasFault ? "Last: \(fault)" : "\(Int(entry.snapshot.watts.rounded())) W · VESC") }
                 default:
                     VStack(alignment: .leading, spacing: 2) {
                         Text("LAST  \(battery)").font(.headline)
                         Text("\(Int(entry.snapshot.watts.rounded())) W · \(entry.snapshot.batteryVoltage, specifier: "%.1f") V")
                             .font(.caption)
-                        Text("ESC \(Int(entry.snapshot.mosTempC.rounded()))° · MOTOR \(Int(entry.snapshot.motorTempC.rounded()))°")
-                            .font(.caption2)
+                        Text("ESC \(Int(entry.snapshot.mosTempC.rounded()))° · \(fault)")
+                            .font(.caption2).lineLimit(1).minimumScaleFactor(0.6)
                         Text(entry.snapshot.updatedAt, style: .relative)
                             .font(.system(size: 9)).foregroundStyle(.secondary)
                     }
@@ -76,7 +83,7 @@ struct FoilingTelemetryWidget: Widget {
             FoilingTelemetryWidgetView(entry: entry)
         }
         .configurationDisplayName("VESC Foil Assist")
-        .description("Battery, power and temperatures from the latest telemetry. Open the app for live readings.")
+        .description("Battery, power, ESC temperature and controller fault from the latest telemetry. Open the app for live readings.")
         .supportedFamilies([.accessoryRectangular, .accessoryInline, .accessoryCircular, .accessoryCorner])
     }
 }

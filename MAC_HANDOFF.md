@@ -28,7 +28,10 @@ If storage fails, the UI displays the error. The previous successful checkpoint 
 
 Before relying on the readings, verify:
 
-- Voltage, current, controller and motor temperatures agree with VESC Tool for your firmware and sensors; battery percent agrees with your known pack state.
+- Voltage, current and ESC temperature agree with VESC Tool for your firmware and sensor; battery percent agrees with your known pack state. Motor temperature is not polled or displayed.
+- Compare VESC fault status with VESC Tool: no fault, a known reported error and an unfamiliar code must remain distinct. Disconnect or stop packets and confirm fault status becomes unavailable rather than a live all-clear.
+- Mark a launch/beach point, save a separate finish using decimal coordinates and the map center pin, restart the app and switch between both saved targets. Verify arrow direction against a known bearing outdoors, and confirm GPS or heading loss removes unavailable guidance.
+- Check distance and straight-line ETA against a known course. Choose a 20% arrival reserve, observe a stable battery decline for at least a minute, and check estimated arrival, reserve shortfall and exhaustion warnings. Confirm source/pack changes, target changes, GPS/BLE gaps and unstable/flat readings invalidate the estimate.
 - GPS speed is displayed only with fresh valid location data; propeller RPM is never treated as speed over water.
 - Start, ride, save, quit and reopen preserves history. Confirm the recovered label after terminating during recording.
 - Turn off or move out of range of the BLE adapter, reconnect and confirm the same ride continues with a gap rather than fabricated data.

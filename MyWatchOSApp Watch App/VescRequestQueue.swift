@@ -37,7 +37,7 @@ struct VescRequestQueue {
         let length: Int
         switch command {
         case 50:
-            allowedMask = (1 << 11) | (1 << 8) | (1 << 7) | (1 << 3) | (1 << 1) | (1 << 0)
+            allowedMask = (1 << 15) | (1 << 11) | (1 << 8) | (1 << 7) | (1 << 3) | (1 << 1) | (1 << 0)
             length = 5
         case 51:
             allowedMask = (1 << 6) | (1 << 8)

@@ -3,7 +3,7 @@ import XCTest
 @testable import VESCCore
 
 final class VescRequestQueueTests: XCTestCase {
-    private let realtime = Data([50, 0, 0, 9, 0x8b])
+    private let realtime = Data([50, 0, 0, 0x89, 0x89])
     private let setup = Data([51, 0, 0, 1, 0x40])
     private let statistics = Data([128, 4, 0xfc])
 
@@ -78,6 +78,15 @@ final class VescRequestQueueTests: XCTestCase {
         XCTAssertTrue(queue.enqueue(realtime), "Malformed requests must not poison subsequent valid queries")
     }
 
+    func testFaultMaskIsReadOnlyAndUnknownSelectiveFieldsAreRejected() {
+        var queue = VescRequestQueue()
+        XCTAssertTrue(queue.enqueue(Data([50, 0, 0, 0x80, 0]))) // One fault byte requested.
+        XCTAssertTrue(queue.enqueue(realtime)) // Pending primary replaces smaller query.
+        XCTAssertEqual(queue.takeNext(), realtime)
+        queue.complete()
+        XCTAssertFalse(queue.enqueue(Data([50, 0, 1, 0, 0]))) // Unsupported PID position bit16.
+        XCTAssertEqual(queue.count, 0)
+    }
     func testDisconnectResetDropsPendingAndInFlightQueries() {
         var queue = VescRequestQueue()
         queue.enqueue(realtime)

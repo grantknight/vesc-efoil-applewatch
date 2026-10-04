@@ -2,25 +2,41 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
+private var requestsDemo: Bool {
+    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination"].contains($0) }
+}
+
+private enum HomeSheet: String, Identifiable {
+    case settings, history, destination
+    var id: String { rawValue }
+}
+
 struct ContentView: View {
     @StateObject private var bluetoothManager = BluetoothManager(
-        startBluetooth: !ProcessInfo.processInfo.arguments.contains("--demo")
+        startBluetooth: !requestsDemo
     )
-    @State private var showDemo = ProcessInfo.processInfo.arguments.contains("--demo")
+    @State private var showDemo = requestsDemo
     @State private var showHistory = false
+    @State private var hasEnteredHome = false
 
     var body: some View {
         Group {
             if showDemo {
                 DemoWatchView { showDemo = false }
-            } else if bluetoothManager.state == .connected {
-                Home(bluetoothManager: bluetoothManager, showDemo: $showDemo)
+            } else if bluetoothManager.state == .connected || hasEnteredHome {
+                Home(bluetoothManager: bluetoothManager, showDemo: $showDemo, showConnection: {
+                    bluetoothManager.restart()
+                    if bluetoothManager.state != .connected { hasEnteredHome = false }
+                })
             } else {
                 ConnectionScreen(bluetoothManager: bluetoothManager, showDemo: $showDemo, showHistory: $showHistory)
             }
         }
         .sheet(isPresented: $showHistory) { RideHistoryView(logger: SessionLogger.shared) }
         .onChange(of: showDemo) { _, enabled in bluetoothManager.setDemoMode(enabled) }
+        .onChange(of: bluetoothManager.state == .connected) { _, connected in
+            if connected { hasEnteredHome = true }
+        }
     }
 
 }
@@ -91,22 +107,48 @@ struct Home: View {
     @ObservedObject private var rtStats: VESCRtStats
     @ObservedObject private var logger = SessionLogger.shared
     @Binding var showDemo: Bool
+    let showConnection: () -> Void
     @State private var tabSelected = 0
-    @State private var isSettingsPresented = false
-    @State private var showHistory = false
+    @State private var sheet: HomeSheet?
     @State private var confirmSave = false
+    @State private var arrivalEstimator = ArrivalBatteryEstimator()
     @StateObject private var locationManager = LocationManager()
     @StateObject private var destinationManager = DestinationManager()
 
-    init(bluetoothManager: BluetoothManager, showDemo: Binding<Bool>) {
+    init(bluetoothManager: BluetoothManager, showDemo: Binding<Bool>, showConnection: @escaping () -> Void) {
         self.bluetoothManager = bluetoothManager
         _showDemo = showDemo
+        self.showConnection = showConnection
         _rtStats = ObservedObject(wrappedValue: bluetoothManager.vescRtStats)
     }
 
     private var speedUnit: GPSSpeedUnit { locationManager.getSpeedUnit() }
     private var displaySpeed: Double { locationManager.hasFreshSpeed ? locationManager.speed : 0 }
     private var travelSpeedMs: Double { locationManager.hasFreshSpeed ? locationManager.smoothedSpeedMs : 0 }
+    private var freshCoordinate: CLLocationCoordinate2D? { locationManager.hasFreshLocation ? locationManager.currentCoordinate : nil }
+    private var remainingDistance: Double? { destinationManager.distance(from: freshCoordinate) }
+    private var eta: TimeInterval? { NavigationEstimate.etaSeconds(distanceMeters: remainingDistance, speedMs: locationManager.hasFreshSpeed ? travelSpeedMs : nil) }
+    private var prediction: ArrivalBatteryPrediction? {
+        guard rtStats.isFresh(), rtStats.batteryPercentIsAvailable, locationManager.hasFreshSpeed else { return nil }
+        return arrivalEstimator.prediction(etaSeconds: eta, reservePercent: destinationManager.reservePercent)
+    }
+    private var estimateReason: String {
+        guard rtStats.isFresh(), rtStats.batteryPercentIsAvailable, locationManager.hasFreshSpeed else { return "Fresh battery and GPS observations are required" }
+        return arrivalEstimator.predictionUnavailableReason(etaSeconds: eta, reservePercent: destinationManager.reservePercent) ?? "Measured consumption estimate"
+    }
+    private var dashboardNavigation: String {
+        guard destinationManager.destination != nil else { return "Tap arrow to choose destination" }
+        return destinationManager.destinationName + " · " + destinationManager.formattedDistance(remainingDistance).replacingOccurrences(of: "Distance: ", with: "")
+            + " · " + destinationManager.formattedETA(eta).replacingOccurrences(of: "ETA: ", with: "")
+    }
+    private var dashboardReserve: String {
+        if let prediction {
+            if prediction.willExhaustBeforeArrival { return "Battery may run out before arrival" }
+            if prediction.reserveShortfallPercent > 0 { return String(format: "Reserve short by %.0f%% · est.", ceil(prediction.reserveShortfallPercent)) }
+            return String(format: "Arrival ~%.0f%% · reserve %.0f%%", floor(max(0, prediction.arrivalPercent)), destinationManager.reservePercent)
+        }
+        return String(format: "Reserve %.0f%% · estimate unavailable", destinationManager.reservePercent)
+    }
 
     var body: some View {
         TabView(selection: $tabSelected) {
@@ -115,7 +157,12 @@ struct Home: View {
                     rtStats: rtStats, displaySpeed: displaySpeed, speedUnit: speedUnit,
                     speedAvailable: locationManager.hasFreshSpeed,
                     connectionMessage: bluetoothManager.connectionMessage,
-                    isRecording: logger.isRecording, now: Date()
+                    isRecording: logger.isRecording, now: Date(),
+                    directionAngle: destinationManager.arrowAngle(current: freshCoordinate, heading: locationManager.directionHeading),
+                    directionReference: locationManager.directionReference,
+                    navigationSummary: dashboardNavigation, reserveSummary: dashboardReserve,
+                    reserveWarning: (prediction?.reserveShortfallPercent ?? 0) > 0,
+                    onDestinationTap: { sheet = .destination }
                 )
             }.tag(0)
 
@@ -129,6 +176,9 @@ struct Home: View {
                         }
                         detail("Battery", rtStats.isFresh(now: Date()) ? String(format: "%.1f V", rtStats.batteryVoltage) : "—")
                         detail("Input current", rtStats.isFresh(now: Date()) ? String(format: "%.1f A", rtStats.inputCurrent) : "—")
+                        detail("ESC temperature", rtStats.isFresh() ? String(format: "%.0f°C", rtStats.mosTemperature) : "—")
+                        Text(rtStats.faultLabel ?? "Fault status unavailable")
+                            .font(.caption).foregroundStyle(rtStats.faultCode == 0 && rtStats.faultIsAvailable() ? Color.secondary : Color.orange)
                         detail("Motor RPM", rtStats.isFresh(now: Date()) ? String(format: "%.0f", rtStats.rpm) : "—")
                         Text("GPS reports ground speed. Motor RPM is not travel speed.")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -160,33 +210,36 @@ struct Home: View {
                             Text(error).font(.caption2).foregroundStyle(.orange)
                             Button("Retry storage") { logger.retryLoad() }
                         }
-                        Button("Ride history") { showHistory = true }
+                        Button("Ride history") { sheet = .history }
                     }.padding(.horizontal, 8)
                 }
             }.tag(2)
 
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                NavigationTabView(
-                    locationManager: locationManager, destinationManager: destinationManager,
-                    speedUnit: speedUnit, displaySpeed: displaySpeed,
-                    travelSpeedMs: travelSpeedMs, smoothedEta: nil
-                )
+                NavigationSummaryView(destinationManager: destinationManager, currentCoordinate: freshCoordinate,
+                    heading: locationManager.directionHeading,
+                    eta: eta, prediction: prediction, unavailableReason: estimateReason,
+                    directionReference: locationManager.directionReference)
             }.tag(3)
 
             ScrollView {
                 VStack(spacing: 10) {
                     Label("Foil Assist", systemImage: "water.waves").font(.headline).foregroundStyle(.cyan)
-                    Button("Settings") { isSettingsPresented = true }
-                    Button("Ride history") { showHistory = true }
+                    Button("Settings") { sheet = .settings }
+                    Button("Connection / device", action: showConnection)
+                    Button("Ride history") { sheet = .history }
                     Button("Preview app") { showDemo = true }
                     Text("Read-only telemetry. Configure your battery before riding.").font(.caption2).foregroundStyle(.secondary)
                 }.padding(.horizontal, 8)
             }.tag(4)
         }
         .tabViewStyle(.page)
-        .sheet(isPresented: $showHistory) { RideHistoryView(logger: logger) }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager, destinationManager: destinationManager)
+        .sheet(item: $sheet) { destination in
+            switch destination {
+            case .history: RideHistoryView(logger: logger)
+            case .settings: SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager, destinationManager: destinationManager, onConnection: showConnection)
+            case .destination: DestinationPickerView(destinationManager: destinationManager, currentCoordinate: freshCoordinate)
+            }
         }
         .alert("Save this ride?", isPresented: $confirmSave) {
             Button("Save ride") { logger.endRide() }
@@ -206,175 +259,222 @@ struct Home: View {
         .onChange(of: locationManager.speed) { _, _ in
             bluetoothManager.publishTelemetrySnapshot(displaySpeed: displaySpeed, speedUnit: speedUnit)
         }
+        .onChange(of: rtStats.lastTelemetryTimestamp) { _, timestamp in
+            arrivalEstimator.observe(percent: rtStats.batteryPercentIsAvailable ? rtStats.batteryPercent : nil,
+                source: rtStats.batteryPercentIsAvailable ? batteryTrendSource : nil,
+                at: timestamp, distanceMeters: locationManager.hasFreshSpeed ? remainingDistance : nil,
+                isTelemetryFresh: rtStats.isFresh())
+        }
+        .onChange(of: destinationManager.destination?.latitude) { _, _ in arrivalEstimator.reset() }
+        .onChange(of: destinationManager.destination?.longitude) { _, _ in arrivalEstimator.reset() }
+        .onChange(of: destinationManager.destinationKind) { _, _ in arrivalEstimator.reset() }
+        .onChange(of: batteryTrendSource) { _, _ in arrivalEstimator.reset() }
     }
 
     private func detail(_ name: String, _ value: String) -> some View {
         HStack { Text(name).foregroundStyle(.secondary); Spacer(); Text(value).monospacedDigit() }.font(.caption)
     }
-}
 
-struct NavigationTabView: View {
-    @ObservedObject var locationManager: LocationManager
-    @ObservedObject var destinationManager: DestinationManager
-    let speedUnit: GPSSpeedUnit
-    let displaySpeed: Double
-    let travelSpeedMs: Double
-    let smoothedEta: TimeInterval?
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.9)
-                .ignoresSafeArea()
-
-            if destinationManager.destination == nil {
-                VStack(spacing: 8) {
-                    Image(systemName: "mappin.slash")
-                        .font(.system(size: 20))
-                        .foregroundColor(.orange)
-                    Text("No destination set")
-                        .font(.caption)
-                    DestinationPickerButton(destinationManager: destinationManager, currentCoordinate: locationManager.currentCoordinate)
-                }
-                .padding()
-            } else {
-                let freshCoordinate = locationManager.hasFreshLocation ? locationManager.currentCoordinate : nil
-                let distance = destinationManager.distance(from: freshCoordinate)
-                let eta = destinationManager.etaSeconds(distanceMeters: distance, speedMs: travelSpeedMs)
-                let arrowAngle = destinationManager.arrowAngle(
-                    current: freshCoordinate,
-                    heading: locationManager.hasFreshHeading ? locationManager.smoothedHeadingDegrees : nil
-                )
-
-                VStack(spacing: 4) {
-                    Text(destinationManager.destinationName)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    Image(systemName: arrowAngle == nil ? "location.slash" : "location.north.fill")
-                        .font(.system(size: 44, weight: .bold))
-                        .foregroundColor(.cyan)
-                        .rotationEffect(.degrees(arrowAngle ?? 0))
-                        .animation(.easeInOut(duration: 0.2), value: arrowAngle ?? 0)
-
-                    Text(destinationManager.formattedDistance(distance))
-                        .font(.caption)
-                    Text(destinationManager.formattedETA(smoothedEta ?? eta))
-                        .font(.caption)
-                        .fontWeight(.semibold)
-
-                    Text(locationManager.hasFreshSpeed ? "GPS: \(String(format: "%.1f", displaySpeed)) \(speedUnit.rawValue)" : "GPS speed unavailable")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 8) {
-                        DestinationPickerButton(destinationManager: destinationManager, currentCoordinate: locationManager.currentCoordinate)
-                        Button("Clear") {
-                            destinationManager.clearDestination()
-                        }
-                        .font(.caption2)
-                    }
-                    Text(arrowAngle == nil ? "Waiting for GPS / heading" : "Straight-line guidance")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 6)
-            }
+    private var batteryTrendSource: String {
+        var identity = String(describing: rtStats.batteryPercentSource)
+        if rtStats.batteryPercentSource == .voltageEstimate {
+            identity += "-\(BatteryConfig.cellCount)-\(BatteryConfig.minVoltagePerCell)-\(BatteryConfig.maxVoltagePerCell)"
         }
+        return identity
     }
 }
 
-struct DestinationPickerButton: View {
+struct NavigationSummaryView: View {
     @ObservedObject var destinationManager: DestinationManager
     let currentCoordinate: CLLocationCoordinate2D?
-    @State private var showPicker = false
+    let heading: Double?
+    let eta: TimeInterval?
+    let prediction: ArrivalBatteryPrediction?
+    let unavailableReason: String
+    var directionReference = "Direction unavailable"
+    var usesSampleData = false
+    @State private var showEditor = false
 
     var body: some View {
-        Button(destinationManager.destination == nil ? "Set destination" : "Edit destination") {
-            showPicker = true
-        }
-        .font(.caption2)
-        .sheet(isPresented: $showPicker) {
-            DestinationPickerView(
-                destinationManager: destinationManager,
-                currentCoordinate: currentCoordinate
-            )
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 8) {
+                    Text(destinationManager.destination == nil ? "Choose destination" : destinationManager.destinationName)
+                        .font(.headline).foregroundStyle(.mint)
+                    Text(destinationManager.destinationKind.title).font(.caption2).foregroundStyle(.secondary)
+                    let angle = destinationManager.arrowAngle(current: currentCoordinate, heading: heading)
+                    Button { showEditor = true } label: {
+                        Image(systemName: angle == nil ? "location.circle" : "location.north.fill")
+                            .font(.system(size: 38, weight: .bold)).foregroundStyle(.mint)
+                            .rotationEffect(.degrees(angle ?? 0)).frame(minWidth: 44, minHeight: 44)
+                    }.buttonStyle(.plain).accessibilityLabel("Destination setup")
+                    Text(angle == nil ? "Direction unavailable" : directionReference).font(.caption2).foregroundStyle(.secondary)
+                    Text(destinationManager.formattedDistance(destinationManager.distance(from: currentCoordinate))).font(.caption)
+                    Text(destinationManager.formattedETA(eta)).font(.caption.bold())
+                    if let prediction {
+                        Text(String(format: "Est. arrival battery %.0f%%", floor(max(0, prediction.arrivalPercent))))
+                            .font(.caption.bold()).foregroundStyle(prediction.reserveShortfallPercent > 0 ? Color.orange : Color.mint)
+                        if prediction.willExhaustBeforeArrival {
+                            Text("Projected battery exhaustion before arrival").font(.caption2).foregroundStyle(.red)
+                        }
+                        if prediction.reserveShortfallPercent > 0 {
+                            Text(String(format: "Reserve short by %.0f%%", ceil(prediction.reserveShortfallPercent)))
+                                .font(.caption.bold()).foregroundStyle(.orange)
+                        }
+                    } else {
+                        Text("Arrival battery unavailable").font(.caption).foregroundStyle(.orange)
+                        Text(unavailableReason).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.caption)
+                    Button("Destination setup") { showEditor = true }.tint(.mint)
+                    Text("Straight-line guidance only. Battery estimates assume recent consumption continues; wind, current and assist use can change the result.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }.multilineTextAlignment(.center).padding(.horizontal, 8)
+            }.navigationTitle("Navigate")
+                .sheet(isPresented: $showEditor) {
+                    DestinationPickerView(destinationManager: destinationManager, currentCoordinate: currentCoordinate, usesSampleData: usesSampleData)
+                }
         }
     }
-}
-
-private struct MapDestinationPin: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
 }
 
 struct DestinationPickerView: View {
     @ObservedObject var destinationManager: DestinationManager
     let currentCoordinate: CLLocationCoordinate2D?
-
+    var usesSampleData = false
     @Environment(\.dismiss) private var dismiss
-    @State private var region: MKCoordinateRegion
+    @State private var pointKind: DestinationKind = .finish
+    @State private var pointName = ""
+    @State private var latitude = ""
+    @State private var longitude = ""
+    @State private var feedback = ""
+    @State private var confirmClearLaunch = false
 
-    init(destinationManager: DestinationManager, currentCoordinate: CLLocationCoordinate2D?) {
-        self.destinationManager = destinationManager
-        self.currentCoordinate = currentCoordinate
-
-        let base = destinationManager.destination ?? currentCoordinate ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
-        _region = State(initialValue: MKCoordinateRegion(
-            center: base,
-            span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
-        ))
-    }
-
-    private var annotationItems: [MapDestinationPin] {
-        guard let destination = destinationManager.destination else { return [] }
-        return [MapDestinationPin(coordinate: destination)]
+    private var manualCoordinate: CLLocationCoordinate2D? {
+        guard let lat = Double(latitude.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let lon = Double(longitude.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+        let coordinate = NavigationCoordinate(latitude: lat, longitude: lon)
+        guard coordinate.isValid else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text("Pan map, pin center")
-                .font(.caption2)
-
-            Map(
-                coordinateRegion: $region,
-                interactionModes: [.pan, .zoom],
-                annotationItems: annotationItems
-            ) { item in
-                MapMarker(coordinate: item.coordinate, tint: .red)
-            }
-            .overlay(alignment: .center) {
-                Image(systemName: "plus")
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .padding(4)
-                    .background(.black.opacity(0.5))
-                    .clipShape(Circle())
-            }
-
-            Button("Set pin at center") {
-                destinationManager.setDestination(region.center)
-                dismiss()
-            }
-            .font(.caption)
-
-            if let destination = destinationManager.destination {
-                Text(String(format: "%.4f, %.4f", destination.latitude, destination.longitude))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
-            Button("Cancel") {
-                dismiss()
-            }
-            .font(.caption2)
+        NavigationStack {
+            Form {
+                if usesSampleData { Text("DEMO · SAMPLE POINTS").font(.caption2.bold()).foregroundStyle(.orange) }
+                Section("Launch / beach") {
+                    Text(destinationManager.launchCoordinate == nil ? "No launch saved" : destinationManager.launchName)
+                        .font(.caption)
+                    Button(usesSampleData ? "Mark sample launch" : "Mark launch from GPS") {
+                        guard let currentCoordinate else { return }
+                        destinationManager.saveLaunchPoint(currentCoordinate)
+                        feedback = "Launch saved. Current target preserved."
+                    }.disabled(currentCoordinate == nil).accessibilityIdentifier("mark-launch")
+                    if currentCoordinate == nil { Text("A fresh GPS fix is required.").font(.caption2).foregroundStyle(.secondary) }
+                    Button("Return to launch") {
+                        destinationManager.selectReturnToLaunch()
+                        dismiss()
+                    }.disabled(destinationManager.launchCoordinate == nil).accessibilityIdentifier("return-launch")
+                    if destinationManager.launchCoordinate != nil {
+                        Button("Remove saved launch", role: .destructive) { confirmClearLaunch = true }
+                    }
+                }
+                Section("Finish") {
+                    if destinationManager.finishCoordinate != nil {
+                        Button("Go to \(destinationManager.finishName)") { destinationManager.selectFinish(); dismiss() }
+                        Button("Clear finish", role: .destructive) { destinationManager.clearDestination() }
+                    }
+                }
+                Section("Add a named point") {
+                    Picker("Point type", selection: $pointKind) {
+                        ForEach(DestinationKind.allCases) { kind in Text(kind.title).tag(kind) }
+                    }
+                    TextField("Name", text: $pointName).accessibilityIdentifier("destination-name")
+                    TextField("Latitude", text: $latitude).accessibilityIdentifier("destination-latitude")
+                    TextField("Longitude", text: $longitude).accessibilityIdentifier("destination-longitude")
+                    Text("Decimal degrees: latitude −90…90, longitude −180…180. Use a period for decimals.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Button("Save coordinates") {
+                        guard let manualCoordinate else { feedback = "Enter valid decimal latitude and longitude."; return }
+                        save(manualCoordinate)
+                    }.disabled(manualCoordinate == nil).accessibilityIdentifier("save-coordinates")
+                    NavigationLink("Choose on map") {
+                        MapPointPickerView(destinationManager: destinationManager, currentCoordinate: currentCoordinate,
+                            pointKind: pointKind, pointName: pointName)
+                    }.accessibilityIdentifier("choose-map")
+                }
+                Section("Battery reserve") {
+                    Stepper(String(format: "Reserve %.0f%%", destinationManager.reservePercent),
+                        value: $destinationManager.reservePercent, in: 0...100, step: 5)
+                    Text("Default 20%. Arrival battery needs a steady measured depletion trend while approaching the selected point.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                if !feedback.isEmpty { Text(feedback).font(.caption).foregroundStyle(.mint).accessibilityIdentifier("destination-feedback") }
+                Button("Done") { dismiss() }
+            }.navigationTitle("Destination")
+                .alert("Remove launch point?", isPresented: $confirmClearLaunch) {
+                    Button("Remove", role: .destructive) { destinationManager.clearLaunchPoint() }
+                    Button("Keep", role: .cancel) {}
+                } message: { Text("The saved finish is preserved.") }
         }
-        .padding()
-        .onAppear {
-            if let destination = destinationManager.destination {
-                region.center = destination
-            } else if let currentCoordinate {
-                region.center = currentCoordinate
-            }
+    }
+
+    private func save(_ coordinate: CLLocationCoordinate2D) {
+        if pointKind == .launch {
+            destinationManager.saveLaunchPoint(coordinate, name: pointName.isEmpty ? "Launch / beach" : pointName)
+            feedback = "Launch saved independently of finish."
+        } else {
+            destinationManager.setDestination(coordinate, name: pointName.isEmpty ? "Finish" : pointName)
+            feedback = "Finish selected. Launch stays saved."
         }
+    }
+}
+
+private struct MapPointPin: Identifiable {
+    let id: String
+    let coordinate: CLLocationCoordinate2D
+}
+
+private struct MapPointPickerView: View {
+    @ObservedObject var destinationManager: DestinationManager
+    let currentCoordinate: CLLocationCoordinate2D?
+    let pointKind: DestinationKind
+    let pointName: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var region: MKCoordinateRegion
+
+    init(destinationManager: DestinationManager, currentCoordinate: CLLocationCoordinate2D?, pointKind: DestinationKind, pointName: String) {
+        self.destinationManager = destinationManager
+        self.currentCoordinate = currentCoordinate
+        self.pointKind = pointKind
+        self.pointName = pointName
+        let existing = pointKind == .launch ? destinationManager.launchCoordinate : destinationManager.finishCoordinate
+        let center = existing ?? currentCoordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+        _region = State(initialValue: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)))
+    }
+
+    private var pins: [MapPointPin] {
+        var points: [MapPointPin] = []
+        if let coordinate = destinationManager.launchCoordinate { points.append(MapPointPin(id: "launch", coordinate: coordinate)) }
+        if let coordinate = destinationManager.finishCoordinate { points.append(MapPointPin(id: "finish", coordinate: coordinate)) }
+        return points
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Text("Pan / zoom; pin the center").font(.caption2)
+            Map(coordinateRegion: $region, interactionModes: [.pan, .zoom], annotationItems: pins) { point in
+                MapMarker(coordinate: point.coordinate, tint: point.id == "launch" ? .orange : .mint)
+            }
+            .overlay { Image(systemName: "plus").foregroundStyle(.white).padding(5).background(.black.opacity(0.5), in: Circle()).allowsHitTesting(false) }
+            Text(String(format: "%.5f, %.5f", region.center.latitude, region.center.longitude)).font(.caption2).monospacedDigit()
+            Button("Save \(pointKind.title) here") {
+                guard region.center.latitude.isFinite, region.center.longitude.isFinite, CLLocationCoordinate2DIsValid(region.center) else { return }
+                if pointKind == .launch { destinationManager.saveLaunchPoint(region.center, name: pointName.isEmpty ? "Launch / beach" : pointName) }
+                else { destinationManager.setDestination(region.center, name: pointName.isEmpty ? "Finish" : pointName) }
+                dismiss()
+            }.font(.caption).tint(.mint).accessibilityIdentifier("save-map-center")
+        }.navigationTitle("Place a pin")
     }
 }
 
@@ -382,6 +482,7 @@ struct SettingsView: View {
     @ObservedObject var locationManager: LocationManager
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var destinationManager: DestinationManager
+    var onConnection: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var showConfirmation = false
@@ -402,7 +503,7 @@ struct SettingsView: View {
                         set: { locationManager.setSpeedUnit($0) }
                     )) {
                         ForEach(GPSSpeedUnit.allCases) { unit in
-                            Text(unit.rawValue).tag(unit)
+                            Text(unit.displayLabel).tag(unit)
                         }
                     }
                 }
@@ -420,8 +521,8 @@ struct SettingsView: View {
                         showDestinationPicker = true
                     }
 
-                    if destinationManager.destination != nil {
-                        Button("Clear destination", role: .destructive) {
+                    if destinationManager.finishCoordinate != nil {
+                        Button("Clear finish", role: .destructive) {
                             destinationManager.clearDestination()
                         }
                     }
@@ -459,13 +560,14 @@ struct SettingsView: View {
             .sheet(isPresented: $showDestinationPicker) {
                 DestinationPickerView(
                     destinationManager: destinationManager,
-                    currentCoordinate: locationManager.currentCoordinate
+                    currentCoordinate: locationManager.hasFreshLocation ? locationManager.currentCoordinate : nil
                 )
             }
             .alert("Reset pairing?", isPresented: $showConfirmation) {
                 Button("Reset", role: .destructive) {
                     dismiss()
                     bluetoothManager.restart(withNewDevice: true)
+                    if bluetoothManager.state != .connected { onConnection() }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {

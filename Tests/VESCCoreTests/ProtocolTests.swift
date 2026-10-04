@@ -118,14 +118,15 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(received, [payload, payload])
     }
     func testSelectiveGoldenRealtimeAndTruncation() {
-        // Independent fixed vector: mask=0x98b, 35C/40C, 12.34A,
-        // 4500 RPM, 52.0V, 1.0Wh. No serializer used to construct it.
-        let payload = Data([50, 0, 0, 9, 0x8b, 1, 0x5e, 1, 0x90,
-                            0, 0, 4, 0xd2, 0, 0, 0x11, 0x94, 2, 8, 0, 0, 0x27, 0x10])
+        // Independent firmware vector: mask=0x8989, ESC35C, 12.34A,
+        // 4500 RPM, 52.0V, 1.0Wh, no fault; no motor sensor or serializer.
+        let payload = Data([50, 0, 0, 0x89, 0x89, 1, 0x5e,
+                            0, 0, 4, 0xd2, 0, 0, 0x11, 0x94, 2, 8, 0, 0, 0x27, 0x10, 0])
         guard case .realtime(let rt) = VescTelemetryDecoder.decode(payload) else { return XCTFail("Valid live vector rejected") }
         XCTAssertTrue(rt.isComplete)
         XCTAssertEqual(rt.controllerTemperature, 35)
-        XCTAssertEqual(rt.motorTemperature, 40)
+        XCTAssertNil(rt.motorTemperature)
+        XCTAssertEqual(rt.faultCode, 0)
         XCTAssertEqual(rt.inputCurrent, 12.34)
         XCTAssertEqual(rt.rpm, 4500)
         XCTAssertEqual(rt.voltage, 52)
@@ -133,6 +134,29 @@ final class ProtocolTests: XCTestCase {
         for length in 0..<payload.count { XCTAssertNil(VescTelemetryDecoder.decode(payload.prefix(length))) }
         XCTAssertNil(VescTelemetryDecoder.decode(payload + Data([0])))
         XCTAssertNil(VescTelemetryDecoder.decode(Data([50, 0, 0, 0, 4, 0, 0, 0, 0]))) // unrequested bit
+    }
+    func testFaultByteWidthAndUnknownCodesRemainDistinctFromNoFault() {
+        for code in [UInt8(0), 5, 6, 33, 255] {
+            let reply = Data([50, 0, 0, 0x80, 0, code]) // Bit15, exactly one byte.
+            guard case .realtime(let rt) = VescTelemetryDecoder.decode(reply) else { return XCTFail("Fault reply") }
+            XCTAssertEqual(rt.faultCode, code)
+            XCTAssertFalse(rt.isComplete, "A fault-only response cannot make old power readings live")
+            XCTAssertNil(VescTelemetryDecoder.decode(reply.dropLast()))
+            XCTAssertNil(VescTelemetryDecoder.decode(reply + Data([0])))
+            let primary = Data([50, 0, 0, 0x89, 0x89, 1, 0x5e,
+                                0, 0, 4, 0xd2, 0, 0, 0x11, 0x94, 2, 8, 0, 0, 0x27, 0x10, code])
+            guard case .realtime(let complete) = VescTelemetryDecoder.decode(primary) else { return XCTFail("Primary fault reply") }
+            XCTAssertTrue(complete.isComplete, "Unknown fault codes must still surface in a validated live sample")
+            XCTAssertEqual(complete.faultCode, code)
+        }
+    }
+    func testLegacyPrimaryWithoutFaultIsNotACompleteCurrentSample() {
+        let reply = Data([50, 0, 0, 9, 0x8b, 1, 0x5e, 1, 0x90,
+                          0, 0, 4, 0xd2, 0, 0, 0x11, 0x94, 2, 8, 0, 0, 0x27, 0x10])
+        guard case .realtime(let rt) = VescTelemetryDecoder.decode(reply) else { return XCTFail("Legacy vector") }
+        XCTAssertEqual(rt.motorTemperature, 40, "Optional legacy decoding retained")
+        XCTAssertNil(rt.faultCode)
+        XCTAssertFalse(rt.isComplete, "Absent fault status must not become no fault")
     }
     func testSetupAndStatsGolden() {
         guard case .setup(let setup) = VescTelemetryDecoder.decode(Data([51, 0, 0, 1, 0x40, 0, 0, 0x13, 0x88, 3, 0x20])) else { return XCTFail("Setup vector") }

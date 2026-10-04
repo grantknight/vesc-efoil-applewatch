@@ -15,9 +15,10 @@ struct RealtimeTelemetry {
     var rpm: Double?
     var voltage: Double?
     var wattHours: Double?
+    var faultCode: UInt8?
     var isComplete: Bool {
-        controllerTemperature != nil && motorTemperature != nil && inputCurrent != nil
-            && rpm != nil && voltage != nil && wattHours != nil
+        controllerTemperature != nil && inputCurrent != nil
+            && rpm != nil && voltage != nil && wattHours != nil && faultCode != nil
     }
 }
 
@@ -44,7 +45,7 @@ enum VescTelemetryDecoder {
         let mask = bytes.vbPopFrontUInt32()
         let widths: [Int: Int]
         switch command {
-        case 50: widths = [0: 2, 1: 2, 3: 4, 7: 4, 8: 2, 11: 4]
+        case 50: widths = [0: 2, 1: 2, 3: 4, 7: 4, 8: 2, 11: 4, 15: 1]
         case 51: widths = [6: 4, 8: 2]
         case 128: widths = [2: 4, 3: 4, 4: 4, 5: 4, 6: 4, 7: 4, 10: 4]
         default: return nil
@@ -66,6 +67,8 @@ enum VescTelemetryDecoder {
             if has(7) { rt.rpm = bytes.vbPopFrontDouble32(scale: 1) }
             if has(8) { rt.voltage = bytes.vbPopFrontDouble16(scale: 10) }
             if has(11) { rt.wattHours = bytes.vbPopFrontDouble32(scale: 10000) }
+            // Firmware commands.c: selective bit 15 is one byte, after Wh bit 11.
+            if has(15) { rt.faultCode = bytes.vbPopFrontUInt8() }
             guard valid(rt.controllerTemperature, in: -100...250), valid(rt.motorTemperature, in: -100...250),
                   valid(rt.inputCurrent, in: -2000...2000), valid(rt.rpm, in: -1_000_000...1_000_000),
                   valid(rt.voltage, in: Double.leastNonzeroMagnitude...200), valid(rt.wattHours, in: -1_000_000...1_000_000) else { return nil }

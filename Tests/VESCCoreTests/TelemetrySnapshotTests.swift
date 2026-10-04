@@ -47,6 +47,37 @@ final class TelemetrySnapshotTests: XCTestCase {
         XCTAssertEqual(decoded.updatedAt, sampleTime)
     }
 
+    func testFaultStatusRoundTripsAndExpiresInsteadOfBecomingNoFault() throws {
+        var snapshot = sample()
+        XCTAssertNil(snapshot.faultLabel(at: sampleTime))
+        for code in [UInt8(0), 5, 33, 255] {
+            snapshot.faultCode = code
+            let decoded = try JSONDecoder().decode(TelemetrySnapshot.self, from: JSONEncoder().encode(snapshot))
+            XCTAssertEqual(decoded.faultCode, code)
+            XCTAssertEqual(decoded.faultLabel(at: sampleTime), VescFaultCode.label(for: code))
+            XCTAssertNil(decoded.faultLabel(at: sampleTime.addingTimeInterval(60)))
+            XCTAssertNil(decoded.faultLabel(at: sampleTime.addingTimeInterval(-1)))
+        }
+        snapshot.isConnected = false
+        XCTAssertNil(snapshot.faultLabel(at: sampleTime))
+    }
+    func testSnapshotFromEarlierVersionHasUnavailableFaultStatus() throws {
+        let encoded = try JSONEncoder().encode(sample())
+        var old = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        old.removeValue(forKey: "faultCode")
+        let decoded = try JSONDecoder().decode(TelemetrySnapshot.self, from: JSONSerialization.data(withJSONObject: old))
+        XCTAssertTrue(decoded.isFresh(at: sampleTime))
+        XCTAssertNil(decoded.faultCode)
+        XCTAssertNil(decoded.faultLabel(at: sampleTime), "A legacy cached reading is not proof of no fault")
+    }
+    func testFirmwareFaultLabelsRetainUnknownNumericIdentity() {
+        XCTAssertEqual(VescFaultCode.label(for: 0), "No fault")
+        XCTAssertEqual(VescFaultCode.label(for: 5), "ESC over temperature")
+        XCTAssertEqual(VescFaultCode.label(for: 6), "Motor over temperature")
+        XCTAssertEqual(VescFaultCode.label(for: 33), "Absolute over speed")
+        XCTAssertEqual(VescFaultCode.label(for: 34), "Unknown fault (34)")
+        XCTAssertEqual(VescFaultCode.label(for: 255), "Unknown fault (255)")
+    }
     func testCorruptCacheCannotAppearFreshOrReachWidgetIntegerConversion() {
         let corruptions: [(String, (inout TelemetrySnapshot) -> Void)] = [
             ("non-finite watts", { $0.watts = .infinity }),

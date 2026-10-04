@@ -13,11 +13,14 @@ enum GPSSpeedUnit: String, CaseIterable, Identifiable {
     case knots
 
     var id: GPSSpeedUnit { self }
+    var displayLabel: String {
+        switch self { case .kph: return "km/h"; case .ms: return "m/s"; default: return rawValue }
+    }
 }
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
-    @Published var speedUnit: GPSSpeedUnit = .mph
+    @Published var speedUnit: GPSSpeedUnit = .kph
     @Published var speed: Double = 0.0
     @Published var rawSpeedMs: Double = 0.0
     @Published var smoothedSpeedMs: Double = 0.0
@@ -28,18 +31,36 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var lastLocationAt: Date?
     @Published private(set) var lastSpeedAt: Date?
     @Published private(set) var lastHeadingAt: Date?
+    @Published private(set) var courseDegrees: Double?
+    @Published private(set) var lastCourseAt: Date?
 
     var hasFreshLocation: Bool {
         guard isEnabled(), isTracking, let lastLocationAt else { return false }
-        return Date().timeIntervalSince(lastLocationAt) < 10
+        return isRecent(lastLocationAt)
     }
     var hasFreshSpeed: Bool {
         guard hasFreshLocation, let lastSpeedAt else { return false }
-        return Date().timeIntervalSince(lastSpeedAt) < 10
+        return isRecent(lastSpeedAt)
     }
     var hasFreshHeading: Bool {
         guard isTracking, let lastHeadingAt else { return false }
-        return Date().timeIntervalSince(lastHeadingAt) < 10
+        return isRecent(lastHeadingAt)
+    }
+    var hasFreshCourse: Bool {
+        guard hasFreshSpeed, rawSpeedMs > 0.5, courseDegrees != nil, let lastCourseAt else { return false }
+        return isRecent(lastCourseAt)
+    }
+    var directionHeading: Double? {
+        if hasFreshHeading { return smoothedHeadingDegrees }
+        return hasFreshCourse ? courseDegrees : nil
+    }
+    var directionReference: String {
+        if hasFreshHeading { return "Compass heading" }
+        return hasFreshCourse ? "GPS course" : "Direction unavailable"
+    }
+    private func isRecent(_ date: Date) -> Bool {
+        let age = Date().timeIntervalSince(date)
+        return age.isFinite && age >= 0 && age <= 10
     }
 
     private let speedSmoothingAlpha: Double = 0.25
@@ -68,11 +89,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
-    /// Efoil: GPS on by default, mph default speed unit.
+    /// GPS and km/h are first-launch defaults; existing explicit preferences are retained.
     private func applyFirstLaunchDefaultsIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: Self.gpsDefaultAppliedKey) else { return }
-        UserDefaults.standard.set(true, forKey: Self.gpsEnabledKey)
-        UserDefaults.standard.set(GPSSpeedUnit.mph.rawValue, forKey: Self.speedUnitKey)
+        if UserDefaults.standard.object(forKey: Self.gpsEnabledKey) == nil { UserDefaults.standard.set(true, forKey: Self.gpsEnabledKey) }
+        if UserDefaults.standard.object(forKey: Self.speedUnitKey) == nil { UserDefaults.standard.set(GPSSpeedUnit.kph.rawValue, forKey: Self.speedUnitKey) }
         UserDefaults.standard.set(true, forKey: Self.gpsDefaultAppliedKey)
     }
 
@@ -118,6 +139,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastLocationAt = nil
         lastSpeedAt = nil
         lastHeadingAt = nil
+        courseDegrees = nil
+        lastCourseAt = nil
     }
 
     func setSpeedUnit(_ unit: GPSSpeedUnit) {
@@ -133,9 +156,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard isEnabled(), isTracking, let location = locations.last else { return }
         guard location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 50,
-              abs(location.timestamp.timeIntervalSinceNow) < 10,
+              isRecent(location.timestamp),
               CLLocationCoordinate2DIsValid(location.coordinate) else { return }
-        var speedMs = location.speed.isFinite && location.speed >= 0 ? location.speed : 0
+        let validSpeed = location.speed.isFinite && (0...100).contains(location.speed)
+        var speedMs = validSpeed ? location.speed : 0
         let rawMs = speedMs
         let coordinate = location.coordinate
 
@@ -159,17 +183,24 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 : (self.smoothedSpeedMs * (1 - self.speedSmoothingAlpha)) + (rawMs * self.speedSmoothingAlpha)
             self.currentCoordinate = coordinate
             self.lastLocationAt = location.timestamp
-            self.lastSpeedAt = location.speed >= 0 && location.speed.isFinite ? location.timestamp : nil
+            self.lastSpeedAt = validSpeed ? location.timestamp : nil
+            if validSpeed, location.speed > 0.5, location.course.isFinite, (0..<360).contains(location.course),
+               location.courseAccuracy.isFinite, location.courseAccuracy >= 0 {
+                self.courseDegrees = location.course
+                self.lastCourseAt = location.timestamp
+            } else {
+                self.courseDegrees = nil
+                self.lastCourseAt = nil
+            }
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         guard isEnabled(), isTracking else { return }
         let trueHeading = newHeading.trueHeading
-        let magneticHeading = newHeading.magneticHeading
-        let resolved = trueHeading >= 0 ? trueHeading : magneticHeading
-        guard resolved >= 0 else { return }
-        guard newHeading.headingAccuracy >= 0, abs(newHeading.timestamp.timeIntervalSinceNow) < 10 else { return }
+        let resolved = trueHeading
+        guard resolved.isFinite, (0..<360).contains(resolved), newHeading.headingAccuracy.isFinite,
+              newHeading.headingAccuracy >= 0, isRecent(newHeading.timestamp) else { return }
         DispatchQueue.main.async {
             guard self.isEnabled(), self.isTracking else { return }
             self.headingDegrees = resolved
@@ -198,6 +229,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             self.lastLocationAt = nil
             self.lastSpeedAt = nil
             self.lastHeadingAt = nil
+            self.courseDegrees = nil
+            self.lastCourseAt = nil
         }
     }
 
@@ -216,6 +249,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             lastLocationAt = nil
             lastSpeedAt = nil
             lastHeadingAt = nil
+            courseDegrees = nil
+            lastCourseAt = nil
             currentCoordinate = nil
             headingDegrees = nil
             smoothedHeadingDegrees = nil

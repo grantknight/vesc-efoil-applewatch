@@ -14,7 +14,20 @@ final class VESCRtStats: ObservableObject {
     var batteryVoltage: Double = 0.0
     var inputCurrent: Double = 0.0
     var mosTemperature: Double = 0.0
-    var motorTemperature: Double = 0.0
+    var motorTemperature: Double = 0.0 // Retained for archive compatibility; no motor sensor is polled.
+    private(set) var faultCode: UInt8?
+    private var faultTimestamp: Date = .distantPast
+    /// Raw codes remain available for history; this label is only current for fresh validated telemetry.
+    var faultLabel: String? { faultIsAvailable() ? faultCode.map { VescFaultCode.label(for: $0) } : nil }
+    func faultIsAvailable(now: Date = Date()) -> Bool {
+        let age = now.timeIntervalSince(faultTimestamp)
+        return faultCode != nil && isFresh(now: now) && age >= 0 && age <= 6
+    }
+    func updateFaultCode(_ code: UInt8?, at date: Date = Date()) {
+        faultCode = code
+        faultTimestamp = code == nil ? .distantPast : date
+        objectWillChange.send()
+    }
     var wattHours: Double = 0.0
     var rpm: Double = 0.0
     var batteryPercent: Double = 0.0
@@ -98,6 +111,8 @@ final class VESCRtStats: ObservableObject {
         inputCurrent = 0.0
         mosTemperature = 0.0
         motorTemperature = 0.0
+        faultCode = nil
+        faultTimestamp = .distantPast
         wattHours = 0.0
         rpm = 0.0
         batteryPercent = 0.0
