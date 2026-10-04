@@ -68,6 +68,8 @@ try {
     await page.locator('[data-action=setDestination]').click();
     await page.locator('[data-action=saveDestination]').click();
     check(await page.locator('[data-action=clearDestination]').count(), 1);
+    check(await page.locator('.nav-arrow').evaluate(el => getComputedStyle(el).transform), 'none');
+    check(await page.locator('.nav-arrow .direction-dial').count(), 1);
     await page.locator('.screen-picker [data-tab=dashboard]').click();
     check((await page.locator('#screen').innerText()).includes('MOTOR'), false);
     check((await page.locator('#screen').innerText()).includes('ESC'), true);

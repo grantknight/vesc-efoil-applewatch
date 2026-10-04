@@ -64,7 +64,7 @@ struct DashboardView: View {
                         .accessibilityLabel(speedAvailable ? "GPS ground speed \(String(format: "%.1f", displaySpeed)) \(speedUnit.displayLabel)" : "GPS speed unavailable")
                     Button(action: onDestinationTap) {
                         VStack(spacing: 1) {
-                            DashboardCompassNeedle(angle: directionAngle, color: sportColor)
+                            DestinationCompassNeedle(angle: directionAngle, color: sportColor)
                                 .frame(width: speedSize + 2, height: speedSize + 2)
                             Text(navigationDistance + " · " + destinationETA)
                                 .foregroundStyle(sportColor).font(.system(size: 7, weight: .semibold))
@@ -108,7 +108,7 @@ struct DashboardView: View {
 
 /// A true direction is drawn only when the caller has a fresh heading/course and bearing.
 /// The neutral ring remains tappable when direction is unavailable.
-private struct DashboardCompassNeedle: View {
+struct DestinationCompassNeedle: View {
     let angle: Double?
     let color: Color
 

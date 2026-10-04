@@ -300,9 +300,8 @@ struct NavigationSummaryView: View {
                     let angle = destinationManager.arrowAngle(current: currentCoordinate, heading: heading)
                     HStack(spacing: 7) {
                         Button { showEditor = true } label: {
-                            Image(systemName: angle == nil ? "location.circle" : "location.north.fill")
-                                .font(.system(size: 25, weight: .bold)).foregroundStyle(.mint)
-                                .rotationEffect(.degrees(angle ?? 0)).frame(width: 30, height: 28)
+                            DestinationCompassNeedle(angle: angle, color: .mint)
+                                .frame(width: 28, height: 28)
                         }.buttonStyle(.plain).accessibilityLabel("Destination setup")
                         Text(angle == nil ? "Direction unavailable" : directionReference)
                             .font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary).lineLimit(2)
