@@ -54,6 +54,10 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     /// Returns fresh GPS speed in m/s. nil means unavailable, never propeller speed.
     var gpsSpeedProvider: (() -> Double?)?
     var telemetryIsFresh: Bool { state == .connected && vescRtStats.isFresh() }
+    /// Also excludes the saved controller while it is temporarily disconnected.
+    var selectedPeripheralID: UUID? {
+        vesc?.identifier ?? UserDefaults.standard.string(forKey: "VESC_UUID").flatMap { UUID(uuidString: $0) }
+    }
 
     override convenience init() { self.init(startBluetooth: true) }
     init(startBluetooth: Bool) {

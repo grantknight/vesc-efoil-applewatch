@@ -3,11 +3,11 @@ import MapKit
 import CoreLocation
 
 private var requestsDemo: Bool {
-    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination"].contains($0) }
+    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination", "--demo-bms", "--demo-bms-unavailable"].contains($0) }
 }
 
 private enum HomeSheet: String, Identifiable {
-    case settings, history, destination
+    case settings, history, destination, bms
     var id: String { rawValue }
 }
 
@@ -15,6 +15,7 @@ struct ContentView: View {
     @StateObject private var bluetoothManager = BluetoothManager(
         startBluetooth: !requestsDemo
     )
+    @StateObject private var bmsManager = BMSManager(startBluetooth: false)
     @State private var showDemo = requestsDemo
     @State private var showHistory = false
     @State private var hasEnteredHome = false
@@ -24,16 +25,24 @@ struct ContentView: View {
             if showDemo {
                 DemoWatchView { showDemo = false }
             } else if bluetoothManager.state == .connected || hasEnteredHome {
-                Home(bluetoothManager: bluetoothManager, showDemo: $showDemo, showConnection: {
+                Home(bluetoothManager: bluetoothManager, bmsManager: bmsManager, showDemo: $showDemo, showConnection: {
                     bluetoothManager.restart()
                     if bluetoothManager.state != .connected { hasEnteredHome = false }
                 })
             } else {
-                ConnectionScreen(bluetoothManager: bluetoothManager, showDemo: $showDemo, showHistory: $showHistory)
+                ConnectionScreen(bluetoothManager: bluetoothManager, bmsManager: bmsManager, showDemo: $showDemo, showHistory: $showHistory)
             }
         }
         .sheet(isPresented: $showHistory) { RideHistoryView(logger: SessionLogger.shared) }
-        .onChange(of: showDemo) { _, enabled in bluetoothManager.setDemoMode(enabled) }
+        .onAppear {
+            bmsManager.setDemoMode(showDemo)
+            bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
+        }
+        .onChange(of: showDemo) { _, enabled in
+            bluetoothManager.setDemoMode(enabled)
+            bmsManager.setDemoMode(enabled)
+        }
+        .onChange(of: bluetoothManager.selectedPeripheralID) { _, identifier in bmsManager.excludePeripheral(identifier) }
         .onChange(of: bluetoothManager.state == .connected) { _, connected in
             if connected { hasEnteredHome = true }
         }
@@ -43,20 +52,23 @@ struct ContentView: View {
 
 private struct ConnectionScreen: View {
     @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var bmsManager: BMSManager
     @ObservedObject private var logger = SessionLogger.shared
     @Binding var showDemo: Bool
     @Binding var showHistory: Bool
+    @State private var showBMS = false
 
     var body: some View {
         NavigationStack {
                     List {
-                        Section {
+                        Section("Connect VESC") {
                             Label(connectionTitle, systemImage: "antenna.radiowaves.left.and.right")
                                 .foregroundStyle(.cyan)
                             Text(connectionDetail).font(.caption).foregroundStyle(.secondary)
                             if bluetoothManager.state == .connecting { ProgressView() }
                             ForEach(bluetoothManager.peripherals, id: \.identifier) { peripheral in
                                 Button(peripheral.name ?? "VESC device") {
+                                    bmsManager.excludePeripheral(peripheral.identifier)
                                     bluetoothManager.connectPeripheral(peripheral: peripheral)
                                 }
                             }
@@ -65,6 +77,13 @@ private struct ConnectionScreen: View {
                                     bluetoothManager.restart(withNewDevice: bluetoothManager.state == .connecting)
                                 }
                             }
+                        }
+                        Section("Battery BMS") {
+                            Button("Connect battery BMS") {
+                                bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
+                                showBMS = true
+                            }
+                            Text("Separate read-only 12S battery connection.").font(.caption2).foregroundStyle(.secondary)
                         }
                         Section("Your rides") {
                             if let error = logger.storageError {
@@ -81,6 +100,8 @@ private struct ConnectionScreen: View {
                         }
                     }
                     .navigationTitle("Foil Assist")
+                }.sheet(isPresented: $showBMS) {
+                    BMSConnectionView(manager: bmsManager, excludedVESC: bluetoothManager.selectedPeripheralID)
                 }
     }
 
@@ -104,6 +125,7 @@ private struct ConnectionScreen: View {
 
 struct Home: View {
     @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var bmsManager: BMSManager
     @ObservedObject private var rtStats: VESCRtStats
     @ObservedObject private var logger = SessionLogger.shared
     @Binding var showDemo: Bool
@@ -115,8 +137,9 @@ struct Home: View {
     @StateObject private var locationManager = LocationManager()
     @StateObject private var destinationManager = DestinationManager()
 
-    init(bluetoothManager: BluetoothManager, showDemo: Binding<Bool>, showConnection: @escaping () -> Void) {
+    init(bluetoothManager: BluetoothManager, bmsManager: BMSManager, showDemo: Binding<Bool>, showConnection: @escaping () -> Void) {
         self.bluetoothManager = bluetoothManager
+        self.bmsManager = bmsManager
         _showDemo = showDemo
         self.showConnection = showConnection
         _rtStats = ObservedObject(wrappedValue: bluetoothManager.vescRtStats)
@@ -223,7 +246,11 @@ struct Home: View {
                 VStack(spacing: 10) {
                     Label("Foil Assist", systemImage: "water.waves").font(.headline).foregroundStyle(.cyan)
                     Button("Settings") { sheet = .settings }
-                    Button("Connection / device", action: showConnection)
+                    Button("Connect VESC", action: showConnection)
+                    Button("Connect battery BMS") {
+                        bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
+                        sheet = .bms
+                    }
                     Button("Ride history") { sheet = .history }
                     Button("Preview app") { showDemo = true }
                     Text("Read-only telemetry. Configure your battery before riding.").font(.caption2).foregroundStyle(.secondary)
@@ -234,8 +261,9 @@ struct Home: View {
         .sheet(item: $sheet) { destination in
             switch destination {
             case .history: RideHistoryView(logger: logger)
-            case .settings: SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager, destinationManager: destinationManager, onConnection: showConnection)
+            case .settings: SettingsView(locationManager: locationManager, bluetoothManager: bluetoothManager, bmsManager: bmsManager, destinationManager: destinationManager, onConnection: showConnection)
             case .destination: DestinationPickerView(destinationManager: destinationManager, currentCoordinate: freshCoordinate)
+            case .bms: BMSConnectionView(manager: bmsManager, excludedVESC: bluetoothManager.selectedPeripheralID)
             }
         }
         .alert("Save this ride?", isPresented: $confirmSave) {
@@ -491,6 +519,7 @@ private struct MapPointPickerView: View {
 struct SettingsView: View {
     @ObservedObject var locationManager: LocationManager
     @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var bmsManager: BMSManager
     @ObservedObject var destinationManager: DestinationManager
     var onConnection: () -> Void = {}
 
@@ -499,6 +528,7 @@ struct SettingsView: View {
     @State private var cellCount = BatteryConfig.cellCount
     @State private var useVescBattery = BatteryConfig.useVescBatteryLevel
     @State private var showDestinationPicker = false
+    @State private var showBMS = false
 
     var body: some View {
         NavigationStack {
@@ -539,6 +569,11 @@ struct SettingsView: View {
                 }
 
                 Section("Battery") {
+                    Button("Connect battery BMS") {
+                        bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
+                        showBMS = true
+                    }
+                    Text("The 12S BMS cells are separate from this VESC percentage setup.").font(.caption2).foregroundStyle(.secondary)
                     Text("Battery % is an estimate. Configure this for your pack.")
                         .font(.caption2).foregroundStyle(.secondary)
                     Toggle("Use VESC battery %", isOn: $useVescBattery)
@@ -572,6 +607,9 @@ struct SettingsView: View {
                     destinationManager: destinationManager,
                     currentCoordinate: locationManager.hasFreshLocation ? locationManager.currentCoordinate : nil
                 )
+            }
+            .sheet(isPresented: $showBMS) {
+                BMSConnectionView(manager: bmsManager, excludedVESC: bluetoothManager.selectedPeripheralID)
             }
             .alert("Reset pairing?", isPresented: $showConfirmation) {
                 Button("Reset", role: .destructive) {

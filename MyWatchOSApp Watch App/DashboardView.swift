@@ -28,8 +28,8 @@ struct DashboardView: View {
         return fresh ? "LIVE" : (rtStats.isConnected ? "STALE DATA" : "RECONNECTING")
     }
     private var faultText: String {
-        if let code = activeFault { return "ESC FAULT \(code) · \(VescFaultCode.label(for: code))" }
-        return faultAvailable ? "No ESC fault" : "ESC fault status unavailable"
+        if let code = activeFault { return "ESC faults: \(code) · \(VescFaultCode.label(for: code))" }
+        return faultAvailable ? "ESC faults: None" : "ESC faults: Unavailable"
     }
 
     var body: some View {
@@ -38,7 +38,7 @@ struct DashboardView: View {
             // have already consumed space outside this geometry on the smallest Watch.
             let gap: CGFloat = 2
             let statusHeight: CGFloat = 9
-            let faultHeight: CGFloat = 20
+            let faultHeight: CGFloat = 24
             let available = max(0, geometry.size.height - statusHeight - faultHeight - gap * 4)
             let heroHeight = available * 0.45
             let tileHeight = available * 0.275
@@ -85,11 +85,12 @@ struct DashboardView: View {
                     tile("ESC temperature", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C", size: valueSize, height: tileHeight)
                     tile("VOLTAGE", value: fresh ? String(format: "%.1f", rtStats.batteryVoltage) : "—", unit: "V", size: valueSize, height: tileHeight)
                 }
-                Text(faultText).font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(activeFault != nil ? Color.red : (faultAvailable ? Color.secondary : Color.orange))
+                Text(faultText).font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(activeFault != nil ? Color.red : (faultAvailable ? sportColor : Color.orange))
                     .lineLimit(2).minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity, minHeight: faultHeight, maxHeight: faultHeight)
-                    .background(activeFault != nil ? Color.red.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                    .background((activeFault != nil ? Color.red : (faultAvailable ? sportColor : Color.orange)).opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke((activeFault != nil ? Color.red : (faultAvailable ? sportColor : Color.orange)).opacity(0.65), lineWidth: 0.7))
                     .accessibilityIdentifier(activeFault != nil ? "esc-fault-warning" : "esc-fault-status")
             }.padding(.horizontal, 5).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(.black)
         }
@@ -165,7 +166,7 @@ struct DemoWatchView: View {
     let onExit: () -> Void
     @StateObject private var stats = VESCRtStats()
     @StateObject private var destinationManager = DestinationManager(persists: false)
-    @State private var tab = ProcessInfo.processInfo.arguments.contains("--demo-navigation") ? 2 : 0
+    @State private var tab = ProcessInfo.processInfo.arguments.contains { ["--demo-bms", "--demo-bms-unavailable"].contains($0) } ? 4 : (ProcessInfo.processInfo.arguments.contains("--demo-navigation") ? 2 : 0)
     @State private var simulateGap = false
     @State private var simulateFault = ProcessInfo.processInfo.arguments.contains("--demo-fault")
     @State private var showDestination = ProcessInfo.processInfo.arguments.contains("--demo-destination")
@@ -224,6 +225,7 @@ struct DemoWatchView: View {
                         Button(simulateFault ? "Clear sample ESC fault" : "Simulate ESC fault") {
                             simulateFault.toggle(); loadSample()
                         }
+                        Button("Sample 12S BMS cells") { tab = 4 }
                     }.font(.caption).padding(.horizontal, 8)
                 }.tag(1)
                 NavigationSummaryView(destinationManager: destinationManager, currentCoordinate: sampleCoordinate,
@@ -241,6 +243,7 @@ struct DemoWatchView: View {
                         Button("Exit demo", action: onExit)
                     }.font(.caption).padding(.horizontal, 8)
                 }.tag(3)
+                BMSDemoView(unavailable: ProcessInfo.processInfo.arguments.contains("--demo-bms-unavailable")).tag(4)
             }.tabViewStyle(.page)
         }.onAppear(perform: loadSample)
             .sheet(isPresented: $showDestination) {

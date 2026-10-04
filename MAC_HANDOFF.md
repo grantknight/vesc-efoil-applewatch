@@ -14,7 +14,8 @@
 3. Provision the same App Group for the watch app and complication. See `WIDGET_SETUP.md` for all places to change a group identifier.
 4. Select your paired Watch as the run destination, build, and run. Allow Bluetooth and location access on the Watch.
 5. Select the VESC BLE UART device from the scan list. The app expects Nordic UART service UUID `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` and the standard VESC packet protocol. Verify your BLE adapter advertises that service. The app only polls telemetry; it sends no throttle or drive commands.
-6. In Settings set the battery series cell count and decide whether to use VESC's reported battery level or the voltage estimate. Confirm against your actual pack and controller configuration; the default 14S is an app setting, not a statement about your hardware.
+6. In Settings set the battery series cell count and decide whether to use VESC's reported battery level or the voltage estimate. New installations default to the confirmed 12S pack; existing saved settings are retained. Confirm the voltage curve against your pack chemistry and controller configuration.
+7. Use **Connect battery BMS** for the separate battery BLE device. Choosing it preserves the VESC connection. The client can read standard device identity and Battery Service percentage when exposed; cell readings need the BMS brand/model and a supported vendor decoder. A successful BLE link alone is not cell-data compatibility. The 12-cell page stays unavailable until complete, fresh measurements exist.
 
 ## Ride logging
 
@@ -30,6 +31,7 @@ Before relying on the readings, verify:
 
 - Voltage, current and ESC temperature agree with VESC Tool for your firmware and sensor; battery percent agrees with your known pack state. Motor temperature is not polled or displayed.
 - Compare VESC fault status with VESC Tool: no fault, a known reported error and an unfamiliar code must remain distinct. Disconnect or stop packets and confirm fault status becomes unavailable rather than a live all-clear.
+- Select the battery/BMS while the VESC is connected and confirm both links independently. Verify detected maker/model against your battery. Until the correct cell protocol is implemented, C1–C12 and spread must stay unavailable; a standard battery percentage must not populate cell voltages. After adding that driver, compare all 12 cells/min/max/spread with the BMS phone app, then disconnect/reconnect and verify freshness. Actual BMS compatibility and dual-link behavior remain hardware checks.
 - Mark a launch/beach point, save a separate finish using decimal coordinates and the map center pin, restart the app and switch between both saved targets. Verify arrow direction against a known bearing outdoors, and confirm GPS or heading loss removes unavailable guidance.
 - Check distance and straight-line ETA against a known course. Choose a 20% arrival reserve, observe a stable battery decline for at least a minute, and check estimated arrival, reserve shortfall and exhaustion warnings. Confirm source/pack changes, target changes, GPS/BLE gaps and unstable/flat readings invalidate the estimate.
 - GPS speed is displayed only with fresh valid location data; propeller RPM is never treated as speed over water.

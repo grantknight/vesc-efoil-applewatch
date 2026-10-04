@@ -12,6 +12,7 @@ A standalone SwiftUI watchOS app for read-only VESC telemetry over Bluetooth LE.
 - Navigation: independently saved launch/beach and downwind finish, manual decimal coordinates or pan-to-pin Apple Maps, direction, straight-line distance and approximate ETA.
 - Arrival battery: recent observed percentage decline predicts remaining battery at the destination; configurable reserve defaults to 20%. Insufficient, stale or unstable measurements show an unavailable estimate.
 - Complication: shared App Group snapshot with cached-reading expiry; WidgetKit controls update timing.
+- Separate battery BMS connection: independent read-only BLE discovery/link, standard device identity and Battery Service percentage when available. A 12S page shows C1–C12, min/max and cell spread; live cell measurements require an identified, supported BMS protocol and otherwise remain unavailable.
 - Native demo: launch with `--demo` or use Preview app. `--demo-navigation`, `--demo-fault` and `--demo-destination` expose additional simulator fixtures. Synthetic values never become real ride observations or saved destination settings.
 
 ## Preview
@@ -22,7 +23,15 @@ Open `preview/watch-preview.html` in a browser. Explore the screens, connection 
 
 Open `MyWatchOSApp.xcodeproj` in Xcode on a Mac, choose the shared **FoilingVESC** scheme and a Watch simulator. For device installation choose your signing team and provision the shared App Group. Complete instructions and the required hardware acceptance checklist are in [MAC_HANDOFF.md](MAC_HANDOFF.md). Complication details are in [WIDGET_SETUP.md](WIDGET_SETUP.md).
 
-Default battery cell count is 14S; that is not a verified description of your pack. Configure it before using voltage-based percentage. VESC-reported battery level also depends on its firmware and configured battery model; it is not necessarily a BMS measurement.
+New installations default to the user's confirmed 12S pack; existing saved cell-count settings are preserved. Confirm the cell count, chemistry and voltage curve before using voltage-based percentage. VESC-reported battery level also depends on its firmware and configured battery model; it is not necessarily a BMS measurement.
+
+## Separate battery BMS
+
+Use **Connect battery BMS** from the initial connection screen, Home menu or Settings. This creates a second BLE session without replacing the VESC. The current/saved VESC device is excluded from the BMS picker. Discovery, connection and read operations have deadlines, and disconnect clears readings. The client performs only standard Bluetooth device-information and battery-percentage reads; it sends no vendor commands or configuration writes.
+
+The **12 cell voltages** page always shows C1–C12. Without a compatible cell decoder, readings and imbalance remain unavailable even when the BLE link succeeds. Battery brand/BMS model, firmware and the current phone-app name are needed to implement that decoder. Pack percentage or pack voltage is never used to invent individual cells. Standard Battery Service percentage is shown separately and does not replace the VESC dashboard/arrival estimate.
+
+`--demo-bms` and `--demo-bms-unavailable` provide clearly labelled, radio-free populated and unknown 12-cell fixtures. No sample readings or device selections enter real ride storage, destination settings or shared snapshots. The browser BMS device picker is a simulation and cannot connect to hardware.
 
 ## Destination and arrival reserve
 

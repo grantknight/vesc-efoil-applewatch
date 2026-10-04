@@ -20,7 +20,7 @@ function boot(storage = new Map()) {
   return { app: context.window.previewApp, elements, get, storage };
 }
 const first = boot();
-for (const name of ['dashboard', 'controller', 'ride', 'navigation', 'history', 'settings']) {
+for (const name of ['dashboard', 'controller', 'ride', 'navigation', 'history', 'settings', 'bms']) {
   first.app.setTab(name);
   assert(first.get('screen').innerHTML.length > 60, name + ' renders');
 }
@@ -75,4 +75,4 @@ second.get('scenario').onchange({ target: { value: 'low' } });
 assert.match(second.get('screen').innerHTML, />14<small>/);
 second.get('unit').onchange({ target: { value: 'mph' } });
 assert.match(second.get('screen').innerHTML, /11\.4/);
-console.log('PASS: six screens; GPS unavailable; stale masking; start guards; gap accounting; save/cancel; browser persistence; delete/cancel; invalid history recovery; units; low battery.');
+console.log('PASS: seven screens; GPS unavailable; stale masking; start guards; gap accounting; save/cancel; browser persistence; delete/cancel; invalid history recovery; units; low battery.');
