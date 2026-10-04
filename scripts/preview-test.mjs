@@ -123,7 +123,7 @@ try {
     check((await page.locator('#screen .fault').innerText()).includes('Under voltage'), true);
     await page.selectOption('#scenario', 'stale');
     check(await page.locator('#screen .fault').count(), 0);
-    check((await page.locator('#screen').innerText()).includes('Arrival battery —'), true);
+    check(await page.locator('.direction-panel .arrival').innerText(), 'Arrival —');
     await page.selectOption('#scenario', 'live');
     await page.locator('[data-action=editDestination]').click();
     await page.locator('#latitude').fill('43.7075');
@@ -141,8 +141,14 @@ try {
     await page.selectOption('#scenario', 'live');
     await page.selectOption('#unit', 'kph');
     check(errors.length, 0);
+    check(await page.locator('#screen .metric').count(), 4);
+    check(await page.locator('#screen .metric .value').evaluateAll(elements => new Set(elements.map(el => getComputedStyle(el).fontSize)).size), 1);
+    check((await page.locator('.direction-panel').innerText()).includes('834 m'), true);
+    check((await page.locator('.direction-panel').innerText()).includes('Arrival ~'), true);
+    check(await page.locator('.fault-footer .fault-status').count(), 1);
     check(await page.locator('.watch-content').evaluate(el => el.scrollHeight <= el.clientHeight), true);
     await page.screenshot({ path: `verification/preview/preview-${width}.png`, fullPage: true });
+    await page.locator('.watch').screenshot({ path: `verification/preview/watch-${width}.png` });
     await page.selectOption('#scenario', 'fault');
     check(await page.locator('.watch-content').evaluate(el => el.scrollHeight <= el.clientHeight), true);
     await page.screenshot({ path: `verification/preview/fault-${width}.png`, fullPage: true });

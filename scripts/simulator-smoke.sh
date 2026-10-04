@@ -2,14 +2,15 @@
 set -euo pipefail
 xcrun simctl list devices available --json > verification-output/simulators.json
 watch_id=$(python3 - <<'PY'
-import json
+import json, os
 data=json.load(open('verification-output/simulators.json'))
+size={'101':'40mm', '202':'42mm', '303':'46mm'}.get(os.environ.get('TEST_SEED'), '40mm')
 for runtime, devices in data['devices'].items():
     if 'watchOS' in runtime:
         for device in devices:
-            if device.get('isAvailable'):
+            if device.get('isAvailable') and '(' + size + ')' in device['name']:
                 print(device['udid']); raise SystemExit(0)
-raise SystemExit('No available watchOS simulator runtime. Native smoke test is incomplete.')
+raise SystemExit('No available ' + size + ' watchOS simulator. Native smoke test is incomplete.')
 PY
 )
 xcrun simctl boot "$watch_id"

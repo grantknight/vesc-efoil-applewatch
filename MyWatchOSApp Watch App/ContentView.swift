@@ -136,18 +136,13 @@ struct Home: View {
         guard rtStats.isFresh(), rtStats.batteryPercentIsAvailable, locationManager.hasFreshSpeed else { return "Fresh battery and GPS observations are required" }
         return arrivalEstimator.predictionUnavailableReason(etaSeconds: eta, reservePercent: destinationManager.reservePercent) ?? "Measured consumption estimate"
     }
-    private var dashboardNavigation: String {
-        guard destinationManager.destination != nil else { return "Tap arrow to choose destination" }
-        return destinationManager.destinationName + " · " + destinationManager.formattedDistance(remainingDistance).replacingOccurrences(of: "Distance: ", with: "")
-            + " · " + destinationManager.formattedETA(eta).replacingOccurrences(of: "ETA: ", with: "")
-    }
-    private var dashboardReserve: String {
+    private var dashboardArrival: String {
         if let prediction {
-            if prediction.willExhaustBeforeArrival { return "Battery may run out before arrival" }
-            if prediction.reserveShortfallPercent > 0 { return String(format: "Reserve short by %.0f%% · est.", ceil(prediction.reserveShortfallPercent)) }
-            return String(format: "Arrival ~%.0f%% · reserve %.0f%%", floor(max(0, prediction.arrivalPercent)), destinationManager.reservePercent)
+            if prediction.willExhaustBeforeArrival { return "Runs out before arrival" }
+            if prediction.reserveShortfallPercent > 0 { return String(format: "Arrival ~%.0f%% · short %.0f%%", floor(max(0, prediction.arrivalPercent)), ceil(prediction.reserveShortfallPercent)) }
+            return String(format: "Arrival ~%.0f%%", floor(max(0, prediction.arrivalPercent)))
         }
-        return String(format: "Reserve %.0f%% · estimate unavailable", destinationManager.reservePercent)
+        return "Arrival battery —"
     }
 
     var body: some View {
@@ -160,7 +155,9 @@ struct Home: View {
                     isRecording: logger.isRecording, now: Date(),
                     directionAngle: destinationManager.arrowAngle(current: freshCoordinate, heading: locationManager.directionHeading),
                     directionReference: locationManager.directionReference,
-                    navigationSummary: dashboardNavigation, reserveSummary: dashboardReserve,
+                    navigationDistance: destinationManager.formattedDistance(remainingDistance).replacingOccurrences(of: "Distance: ", with: ""),
+                    destinationETA: destinationManager.formattedETA(eta).replacingOccurrences(of: "ETA: ", with: ""),
+                    arrivalBatterySummary: dashboardArrival,
                     reserveWarning: (prediction?.reserveShortfallPercent ?? 0) > 0,
                     onDestinationTap: { sheet = .destination }
                 )
@@ -175,12 +172,12 @@ struct Home: View {
                                 .font(.caption).foregroundStyle(.orange)
                         }
                         detail("Battery", rtStats.isFresh(now: Date()) ? String(format: "%.1f V", rtStats.batteryVoltage) : "—")
+                        Text("Battery estimate: " + rtStats.batterySourceLabel).font(.caption2).foregroundStyle(.secondary)
                         detail("Input current", rtStats.isFresh(now: Date()) ? String(format: "%.1f A", rtStats.inputCurrent) : "—")
                         detail("ESC temperature", rtStats.isFresh() ? String(format: "%.0f°C", rtStats.mosTemperature) : "—")
                         Text(rtStats.faultLabel ?? "Fault status unavailable")
                             .font(.caption).foregroundStyle(rtStats.faultCode == 0 && rtStats.faultIsAvailable() ? Color.secondary : Color.orange)
-                        detail("Motor RPM", rtStats.isFresh(now: Date()) ? String(format: "%.0f", rtStats.rpm) : "—")
-                        Text("GPS reports ground speed. Motor RPM is not travel speed.")
+                        Text("GPS reports ground speed, not speed through water.")
                             .font(.caption2).foregroundStyle(.secondary)
                     }.padding(.horizontal, 8)
                 }
@@ -296,45 +293,59 @@ struct NavigationSummaryView: View {
     @State private var showEditor = false
 
     var body: some View {
-        NavigationStack {
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 4) {
                     Text(destinationManager.destination == nil ? "Choose destination" : destinationManager.destinationName)
-                        .font(.headline).foregroundStyle(.mint)
-                    Text(destinationManager.destinationKind.title).font(.caption2).foregroundStyle(.secondary)
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.mint).lineLimit(1).minimumScaleFactor(0.8)
                     let angle = destinationManager.arrowAngle(current: currentCoordinate, heading: heading)
-                    Button { showEditor = true } label: {
-                        Image(systemName: angle == nil ? "location.circle" : "location.north.fill")
-                            .font(.system(size: 38, weight: .bold)).foregroundStyle(.mint)
-                            .rotationEffect(.degrees(angle ?? 0)).frame(minWidth: 44, minHeight: 44)
-                    }.buttonStyle(.plain).accessibilityLabel("Destination setup")
-                    Text(angle == nil ? "Direction unavailable" : directionReference).font(.caption2).foregroundStyle(.secondary)
-                    Text(destinationManager.formattedDistance(destinationManager.distance(from: currentCoordinate))).font(.caption)
-                    Text(destinationManager.formattedETA(eta)).font(.caption.bold())
+                    HStack(spacing: 7) {
+                        Button { showEditor = true } label: {
+                            Image(systemName: angle == nil ? "location.circle" : "location.north.fill")
+                                .font(.system(size: 25, weight: .bold)).foregroundStyle(.mint)
+                                .rotationEffect(.degrees(angle ?? 0)).frame(width: 30, height: 28)
+                        }.buttonStyle(.plain).accessibilityLabel("Destination setup")
+                        Text(angle == nil ? "Direction unavailable" : directionReference)
+                            .font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary).lineLimit(2)
+                    }.frame(height: 28)
+                    Text(destinationManager.formattedDistance(destinationManager.distance(from: currentCoordinate)).replacingOccurrences(of: "Distance: ", with: "") + " · " + destinationManager.formattedETA(eta))
+                        .font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                     if let prediction {
-                        Text(String(format: "Est. arrival battery %.0f%%", floor(max(0, prediction.arrivalPercent))))
-                            .font(.caption.bold()).foregroundStyle(prediction.reserveShortfallPercent > 0 ? Color.orange : Color.mint)
+                        Text(String(format: "Arrival ~%.0f%% · reserve %.0f%%", floor(max(0, prediction.arrivalPercent)), destinationManager.reservePercent))
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(prediction.reserveShortfallPercent > 0 ? Color.orange : Color.mint)
+                            .lineLimit(1).minimumScaleFactor(0.7)
                         if prediction.willExhaustBeforeArrival {
-                            Text("Projected battery exhaustion before arrival").font(.caption2).foregroundStyle(.red)
+                            Text("Battery may run out before arrival").font(.system(size: 9, weight: .bold)).foregroundStyle(.red).lineLimit(2)
                         }
                         if prediction.reserveShortfallPercent > 0 {
                             Text(String(format: "Reserve short by %.0f%%", ceil(prediction.reserveShortfallPercent)))
-                                .font(.caption.bold()).foregroundStyle(.orange)
+                                .font(.system(size: 10, weight: .bold)).foregroundStyle(.orange)
                         }
                     } else {
-                        Text("Arrival battery unavailable").font(.caption).foregroundStyle(.orange)
+                        Text("Arrival battery unavailable").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
+                        Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.system(size: 10))
+                    }
+                    Button("Destination setup") { showEditor = true }.font(.caption).tint(.mint).padding(.top, 4)
+                    if let prediction {
+                        Text("Battery time ~" + durationText(prediction.secondsUntilEmpty)).font(.caption)
+                        if prediction.depletionPercentPerSecond.isFinite, prediction.depletionPercentPerSecond > 0 {
+                            let untilReserve = max(0, prediction.secondsUntilEmpty - destinationManager.reservePercent / prediction.depletionPercentPerSecond)
+                            Text("To reserve ~" + durationText(untilReserve)).font(.caption2)
+                        }
+                        Text("Estimated time to empty from recent consumption.").font(.caption2).foregroundStyle(.secondary)
+                    } else {
                         Text(unavailableReason).font(.caption2).foregroundStyle(.secondary)
                     }
-                    Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.caption)
-                    Button("Destination setup") { showEditor = true }.tint(.mint)
                     Text("Straight-line guidance only. Battery estimates assume recent consumption continues; wind, current and assist use can change the result.")
                         .font(.caption2).foregroundStyle(.secondary)
                 }.multilineTextAlignment(.center).padding(.horizontal, 8)
-            }.navigationTitle("Navigate")
+            }
                 .sheet(isPresented: $showEditor) {
                     DestinationPickerView(destinationManager: destinationManager, currentCoordinate: currentCoordinate, usesSampleData: usesSampleData)
                 }
-        }
+    }
+
+    private func durationText(_ seconds: TimeInterval) -> String {
+        destinationManager.formattedETA(max(0, seconds)).replacingOccurrences(of: "ETA: ", with: "")
     }
 }
 
