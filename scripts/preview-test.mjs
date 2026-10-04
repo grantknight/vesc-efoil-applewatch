@@ -25,7 +25,9 @@ try {
     check(await page.locator('#screen .speed').innerText(), '18.4');
     await page.locator('#gps').uncheck();
     check(await page.locator('#screen .speed').innerText(), '—');
+    check(await page.locator('.direction-dial g').count(), 0);
     await page.locator('#gps').check();
+    check(await page.locator('.direction-dial g').count(), 1);
     await page.selectOption('#unit', 'mph');
     check(await page.locator('#screen .speed').innerText(), '11.4');
     await page.selectOption('#scenario', 'stale');
@@ -143,6 +145,12 @@ try {
     check(errors.length, 0);
     check(await page.locator('#screen .metric').count(), 4);
     check(await page.locator('#screen .metric .value').evaluateAll(elements => new Set(elements.map(el => getComputedStyle(el).fontSize)).size), 1);
+    check(await page.locator('#screen .metric .label').count(), 0);
+    check(await page.locator('#screen .metric .value').evaluateAll(elements => elements.every(el => parseFloat(getComputedStyle(el).fontSize) >= 30)), true);
+    check(await page.locator('#screen .metric small').evaluateAll(elements => elements.every(el => parseFloat(getComputedStyle(el).fontSize) >= 14)), true);
+    check((await page.locator('#screen .metric small').allTextContents()).join('|'), 'W|%|°C|V');
+    check((await page.locator('#screen .metric').nth(1).getAttribute('aria-label')).includes('estimated battery percentage'), true);
+    check((await page.locator('#screen .metric').nth(2).getAttribute('aria-label')).includes('ESC temperature'), true);
     check((await page.locator('.direction-panel').innerText()).includes('834 m'), true);
     check((await page.locator('.direction-panel').innerText()).includes('Arrival ~'), true);
     check(await page.locator('.fault-footer .fault-status').count(), 1);

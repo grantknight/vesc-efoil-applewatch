@@ -42,7 +42,7 @@ struct DashboardView: View {
             let available = max(0, geometry.size.height - statusHeight - faultHeight - gap * 4)
             let heroHeight = available * 0.45
             let tileHeight = available * 0.275
-            let valueSize = min(25, max(14, tileHeight * 0.62))
+            let valueSize = min(30, max(17, tileHeight * 0.80))
             let speedSize = min(38, max(12, min(heroHeight * 0.58, heroHeight - 22)))
             VStack(spacing: gap) {
                 HStack {
@@ -64,10 +64,8 @@ struct DashboardView: View {
                         .accessibilityLabel(speedAvailable ? "GPS ground speed \(String(format: "%.1f", displaySpeed)) \(speedUnit.displayLabel)" : "GPS speed unavailable")
                     Button(action: onDestinationTap) {
                         VStack(spacing: 1) {
-                            Image(systemName: directionAngle == nil ? "location.circle" : "location.north.fill")
-                                .font(.system(size: speedSize, weight: .bold))
-                                .rotationEffect(.degrees(directionAngle ?? 0)).foregroundStyle(sportColor)
-                                .frame(height: speedSize + 2)
+                            DashboardCompassNeedle(angle: directionAngle, color: sportColor)
+                                .frame(width: speedSize + 2, height: speedSize + 2)
                             Text(navigationDistance + " · " + destinationETA)
                                 .foregroundStyle(sportColor).font(.system(size: 7, weight: .semibold))
                             Text(arrivalBatterySummary)
@@ -76,15 +74,15 @@ struct DashboardView: View {
                         }.lineLimit(1).minimumScaleFactor(0.7)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }.buttonStyle(.plain).accessibilityIdentifier("destination-arrow")
-                        .accessibilityLabel("Destination setup. \(directionReference). \(navigationDistance). \(destinationETA). \(arrivalBatterySummary)")
+                        .accessibilityLabel("Destination setup. \(directionAngle == nil ? "Direction unavailable" : directionReference). \(navigationDistance). \(destinationETA). \(arrivalBatterySummary)")
                 }.frame(height: heroHeight)
                 HStack(spacing: 5) {
                     tile("POWER", value: fresh ? String(format: "%.0f", rtStats.instantWatts) : "—", unit: "W", size: valueSize, height: tileHeight)
-                    tile("BATTERY", value: fresh && batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "% est.", size: valueSize, height: tileHeight,
-                         accessibilityDetail: rtStats.batterySourceLabel)
+                    tile("BATTERY", value: fresh && batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "%", size: valueSize, height: tileHeight,
+                         accessibilityDetail: fresh && batteryAvailable ? "Estimated percentage. " + rtStats.batterySourceLabel : "Battery estimate unavailable")
                 }
                 HStack(spacing: 5) {
-                    tile("ESC", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C", size: valueSize, height: tileHeight)
+                    tile("ESC temperature", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C", size: valueSize, height: tileHeight)
                     tile("VOLTAGE", value: fresh ? String(format: "%.1f", rtStats.batteryVoltage) : "—", unit: "V", size: valueSize, height: tileHeight)
                 }
                 Text(faultText).font(.system(size: 8, weight: .bold))
@@ -98,15 +96,67 @@ struct DashboardView: View {
     }
 
     private func tile(_ label: String, value: String, unit: String, size: CGFloat, height: CGFloat, accessibilityDetail: String = "") -> some View {
-        VStack(spacing: 0) {
-            Text(label).font(.system(size: 6, weight: .bold)).foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.system(size: size, weight: .bold, design: .rounded)).monospacedDigit()
-                Text(unit).font(.system(size: 6)).foregroundStyle(.secondary)
-            }.lineLimit(1).minimumScaleFactor(0.75)
-        }.frame(maxWidth: .infinity).frame(height: height)
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(value).font(.system(size: size, weight: .bold, design: .rounded)).monospacedDigit()
+            Text(unit).font(.system(size: min(13, max(10, size * 0.44)), weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+        }.lineLimit(1).minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity).frame(height: height)
             .background(sportColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
             .accessibilityElement(children: .ignore).accessibilityLabel("\(label) \(value) \(unit). \(accessibilityDetail)")
+    }
+}
+
+/// A true direction is drawn only when the caller has a fresh heading/course and bearing.
+/// The neutral ring remains tappable when direction is unavailable.
+private struct DashboardCompassNeedle: View {
+    let angle: Double?
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.16), lineWidth: 0.7)
+            DashboardCompassTicks().stroke(Color.white.opacity(0.32), lineWidth: 0.7)
+            if let angle, angle.isFinite {
+                ZStack {
+                    DashboardNeedleHalf(pointsNorth: false).fill(Color.white.opacity(0.44))
+                    DashboardNeedleHalf(pointsNorth: true).fill(color)
+                }.rotationEffect(.degrees(angle))
+                Circle().fill(color).frame(width: 3, height: 3)
+                    .overlay(Circle().stroke(Color.black, lineWidth: 0.7))
+            } else {
+                Text("—").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            }
+        }.accessibilityHidden(true)
+    }
+}
+
+private struct DashboardNeedleHalf: Shape {
+    let pointsNorth: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let tipY = pointsNorth ? rect.minY + rect.height * 0.08 : rect.maxY - rect.height * 0.08
+        let baseY = pointsNorth ? rect.midY + rect.height * 0.04 : rect.midY - rect.height * 0.04
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: tipY))
+        path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.12, y: baseY))
+        path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.12, y: baseY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct DashboardCompassTicks: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.09))
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - rect.height * 0.09))
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.09, y: rect.midY))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.09, y: rect.midY))
+        return path
     }
 }
 
