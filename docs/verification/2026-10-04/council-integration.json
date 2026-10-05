@@ -1,0 +1,60 @@
+{
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "prior_reviewed_revision": "9f384589ef5883c5cd919a3d641dcf9d49333648",
+  "reviewer": "watch_integration independent source council",
+  "result": "PASS",
+  "review_type": "Fresh independent peer-source review of12S BMS UI wiring, fault visibility and preserved navigation/GPS/history contracts",
+  "reviewed_files": [
+    "MyWatchOSApp Watch App/BMSViews.swift",
+    "MyWatchOSApp Watch App/ContentView.swift",
+    "MyWatchOSApp Watch App/DashboardView.swift",
+    "MyWatchOSApp Watch App/BatteryConfig.swift",
+    "MyWatchOSApp Watch App/NavigationEstimate.swift",
+    "Tests/VESCCoreTests/NavigationEstimateTests.swift",
+    "MyWatchOSApp Watch App/LocationManager.swift",
+    "MyWatchOSApp Watch App/DestinationManager.swift",
+    "MyWatchOSApp Watch App/RideHistoryView.swift"
+  ],
+  "reviewed_source_sha256": {
+    "MyWatchOSApp Watch App/BMSViews.swift": "6bb74c5332396c9ef6b8db93b4e2fb3e6aee39ca0beebfd682ee0166db058ed3",
+    "MyWatchOSApp Watch App/ContentView.swift": "0fb173ef5cfb9d6e1efe0d4777ce1d501c98bc6455fb335430bd01e4be7e0c88",
+    "MyWatchOSApp Watch App/DashboardView.swift": "adb0f1ca5107a1d445fd9a0afeee40e4fcd708fcf7dedfeda47a19cdfc5f4bbb",
+    "MyWatchOSApp Watch App/BatteryConfig.swift": "3ef440816d45e09c97f33b9cee81c24599b57fb60a13fe3d07b30739cd1b8058",
+    "MyWatchOSApp Watch App/NavigationEstimate.swift": "c8a2a1223a373db770d04cd6ab15f6ba983336d34755759535b50fa1e7dd19b0",
+    "Tests/VESCCoreTests/NavigationEstimateTests.swift": "22084371429726b0934eec772dbf83636c7fbb756acea988dc2e117a686b1369",
+    "MyWatchOSApp Watch App/LocationManager.swift": "4ae17f09d5071909d21c7eaeb3b7a31021749f4681e4a74849429b20e1e61095",
+    "MyWatchOSApp Watch App/DestinationManager.swift": "7573960c7375b974680403231658596eb03182a6d2c38898b6367824feda7a43",
+    "MyWatchOSApp Watch App/RideHistoryView.swift": "4c459d4ee3dd37cd6a60e9527f6f71093c39ba84350e5a992e1c2a8414ff6c89"
+  },
+  "reviewed_delta_files": [
+    "MyWatchOSApp Watch App/BMSViews.swift",
+    "MyWatchOSApp Watch App/ContentView.swift",
+    "MyWatchOSApp Watch App/DashboardView.swift",
+    "MyWatchOSApp Watch App/BatteryConfig.swift"
+  ],
+  "checks": [
+    "BMSViews provides explicit separate battery/BMS scan, selection and disconnect controls, linked identity and detected service UUID diagnostics. Device selection and scans reapply excludedVESC; this UI does not route those selections through the VESC connection manager.",
+    "BMS standard battery percentage is labeled separately from12cell voltages and guarded by current-clock freshness. Unknown cell protocol remains explicitly unavailable instead of treating percentage or pack voltage as individual cells.",
+    "BMSLiveCellsView observes manager state while pushed. BMSCellsView requires exactly12cells plus freshness for real readings, uses optional currentSnapshot and only indexes0..<12 after that count guard; non12, missing, future or stale snapshots cannot create a partial balanced-looking pack.",
+    "Cell grid shows measured per-index voltage, min/max and spread only with a complete valid snapshot. Nil/wrong-count/stale states show12unavailable entries and a reason. Periodic callbacks use Date() rather than an earlier scheduled timeline date.",
+    "BMSDemoView creates a pure immutable validated fixture outside the manager; sample and nil-unavailable scenes are routed through the common visible DEMO SAMPLE DATA header. No manager injection or persistence operation occurs in either demo view.",
+    "ContentView retains one BMS StateObject with startBluetooth:false across Home/connection/settings screens. Initial demo appearance and demo mode changes suspend that manager; both new launch flags also disable VESC radio initialization.",
+    "The root reapplies VESC exclusion on selectedPeripheralID changes and before opening BMS settings. Selecting a VESC device first excludes its ID from BMS. Home/settings/connection screens consistently receive the same retained manager; no unpatched initializer callsite was found.",
+    "Connect VESC and Connect battery BMS are separate actions in connection/home/settings UI. Opening a battery sheet leaves the existing Home and logging ownership intact. Live BMS cell view uses default real freshness; only pure demo uses sample bypass.",
+    "BatteryConfig fallback is changed from14to12series as the user specified; existing explicit saved pack configuration remains retained, and the BMS screen is explicitly independent from VESC percentage configuration.",
+    "Dashboard fault row consistently names ESC faults and distinguishes fresh None, active numeric+label and unavailable. Green/red/orange styling and outline improve visibility. New24pt fault height is subtracted from the viewport before allocating remaining hero/metric rows, so no unbudgeted new row is introduced.",
+    "Shared caption-free readout/inline-unit sizing and custom destination compass behavior remain intact. BMS demo adds one fifth page and changes selected launch tab only for its two flags; prior navigation/fault/destination launch routes remain available.",
+    "NavigationEstimate and its14tests, LocationManager, DestinationManager and RideHistoryView are unchanged against the independently reviewed9f384589 source. Prior finite coordinate/ETA, timestamp/source/gap/reset regression, critical arrival/reserve warning, GPS lifecycle and history guards remain applicable.",
+    "BMS view APIs use established SwiftUI NavigationStack/TimelineView/LazyVGrid with the watchOS10.6 target. Source review found no new access mismatch, force-unwrapped optional cell indexing or unsupported platform-only API. Native compilation is a separate gate."
+  ],
+  "open_blocking_defects": [],
+  "scope_exclusions": [
+    "Own-authored BMSManager.swift, BMSCellSnapshot.swift, BMSCellSnapshotTests.swift, Package.swift changes and BluetoothManager selectedPeripheralID getter are excluded from this independent approval; other councils review them.",
+    "Own prior protocol/decoder/BLE/stats/queue/snapshot/widget code and associated tests are also excluded from self-approval.",
+    "Browser preview/test scripts, project/CI configuration and handoff documentation are outside this scoped native source review.",
+    "This report does not assert native test/build execution, screenshot fit or interactive simulator behavior for97d32aa. Fresh18-image native review is pending.",
+    "Live per-cell vendor decoding is not implemented while BMS identity/protocol remains unidentified. Hardware dual connection, standard service support, actual sensor values, outdoor GPS/compass, prolonged background operation and on-water acceptance remain unverified."
+  ],
+  "native_visual_review": "PENDING_NEW_REVISION18SCREENSHOTS",
+  "hardware_acceptance": "EXCLUDED_AND_UNVERIFIED"
+}

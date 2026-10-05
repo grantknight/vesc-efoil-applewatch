@@ -14,7 +14,7 @@ enum BatteryConfig {
     static var cellCount: Int {
         get {
             let stored = UserDefaults.standard.integer(forKey: cellCountKey)
-            return stored > 0 ? stored : 14
+            return stored > 0 ? stored : 12
         }
         set {
             UserDefaults.standard.set(max(1, min(24, newValue)), forKey: cellCountKey)

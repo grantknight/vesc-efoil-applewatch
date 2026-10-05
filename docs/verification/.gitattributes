@@ -1,0 +1,2 @@
+# Historical receipts must retain the exact bytes their hashes describe.
+** -text whitespace=cr-at-eol

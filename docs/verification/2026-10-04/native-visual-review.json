@@ -1,0 +1,291 @@
+{
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "run_id": 37205002808,
+  "result": "PASS",
+  "reviewer": "watch_integration independent native visual council",
+  "independence": "Reviewed peer-authored BMSViews, DashboardView and ContentView rendered UI; reviewer did not author these views. Own BMS manager/model/protocol and WidgetKit work are excluded from self-approval.",
+  "review_type": "Fresh independent visual review of18 actual native launch-scene images, with original-file pixel confirmation for small captions",
+  "screenshots_reviewed": 18,
+  "watch_sizes_mm": [
+    40,
+    42,
+    46
+  ],
+  "size_verification": "Seed101=40mm,202=42mm,303=46mm; matching available simulator names checked against each actual artifact inventory. PNG headers and SHA256 hashes read from all18 original files.",
+  "screenshots": [
+    {
+      "runner": 101,
+      "size_mm": 40,
+      "simulator_name": "Apple Watch SE (40mm) (2nd generation)",
+      "mode": "demo",
+      "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo.png",
+      "pixel_dimensions": [
+        324,
+        394
+      ],
+      "image_sha256": "be8a3433bc76e8f2cca0d76c233dc7c411edc6e5cbd1cb6797468b30a548bdfe",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Adjacent speed/compass and destination details, four equal caption-free readings with units, SAMPLE/REC and complete green ESC faults:None strip fit."
+    },
+    {
+      "runner": 101,
+      "size_mm": 40,
+      "simulator_name": "Apple Watch SE (40mm) (2nd generation)",
+      "mode": "demo-navigation",
+      "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-navigation.png",
+      "pixel_dimensions": [
+        324,
+        394
+      ],
+      "image_sha256": "ba5cfeadd77ddcad72d652bf6a366c46620e279104ed335d424669261345e878",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Shared compass/GPS course, distance/ETA and estimated arrival2%,reserve20%,short18% visible immediately; secondary details below scroll area."
+    },
+    {
+      "runner": 101,
+      "size_mm": 40,
+      "simulator_name": "Apple Watch SE (40mm) (2nd generation)",
+      "mode": "demo-fault",
+      "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-fault.png",
+      "pixel_dimensions": [
+        324,
+        394
+      ],
+      "image_sha256": "9d8fc10977d5a5f1023f8c210180da80516c5727ec9318a0a1fa7886095c5cb1",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Complete red ESC faults:1/Over voltage strip fits under all four readings with status/header/page dots visible."
+    },
+    {
+      "runner": 101,
+      "size_mm": 40,
+      "simulator_name": "Apple Watch SE (40mm) (2nd generation)",
+      "mode": "demo-destination",
+      "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-destination.png",
+      "pixel_dimensions": [
+        324,
+        394
+      ],
+      "image_sha256": "ff0973a93fe2d473e4442b3e99f2f2d057a4724fe404e7ed84950c64066d633f",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Destination/DEMO SAMPLE POINTS and Launch/beach section clear; later editor controls continue below normal scroll viewport."
+    },
+    {
+      "runner": 101,
+      "size_mm": 40,
+      "simulator_name": "Apple Watch SE (40mm) (2nd generation)",
+      "mode": "demo-bms",
+      "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-bms.png",
+      "pixel_dimensions": [
+        324,
+        394
+      ],
+      "image_sha256": "6e91077f08bb3e97b2c612e16da73f6bf8ae73a2e60a58bfa27ba3901fc465e0",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "All12 identified C1...C12 measured sample voltages and units fit in four rows, with min3.814/max3.822V and spread8mV visible. Common DEMO SAMPLE DATA header explicit."
+    },
+    {
+      "runner": 101,
+      "size_mm": 40,
+      "simulator_name": "Apple Watch SE (40mm) (2nd generation)",
+      "mode": "demo-bms-unavailable",
+      "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-bms-unavailable.png",
+      "pixel_dimensions": [
+        324,
+        394
+      ],
+      "image_sha256": "1d3ca3707b994fa1decc490e14218f8778465d0fac305a50b1f39cfb4a13bafa",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "All12 cells remain unavailable dashes, with cell labels/units and Cell protocol not identified warning. No invented balanced pack summary; common DEMO label explicit."
+    },
+    {
+      "runner": 202,
+      "size_mm": 42,
+      "simulator_name": "Apple Watch Series 10 (42mm)",
+      "mode": "demo",
+      "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo.png",
+      "pixel_dimensions": [
+        374,
+        446
+      ],
+      "image_sha256": "ea7c15c3ad3400e8ad88034fd065ff6c8efd2d9e7094c404bfddc46c95c38e9e",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Adjacent speed/compass and destination details, four equal caption-free readings with units, SAMPLE/REC and complete green ESC faults:None strip fit."
+    },
+    {
+      "runner": 202,
+      "size_mm": 42,
+      "simulator_name": "Apple Watch Series 10 (42mm)",
+      "mode": "demo-navigation",
+      "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-navigation.png",
+      "pixel_dimensions": [
+        374,
+        446
+      ],
+      "image_sha256": "791c838948a4354d34519de22e09a32a13ac72d55f0af565bee1cf349f8bae85",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Shared compass/GPS course, distance/ETA and estimated arrival2%,reserve20%,short18% visible immediately; secondary details below scroll area."
+    },
+    {
+      "runner": 202,
+      "size_mm": 42,
+      "simulator_name": "Apple Watch Series 10 (42mm)",
+      "mode": "demo-fault",
+      "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-fault.png",
+      "pixel_dimensions": [
+        374,
+        446
+      ],
+      "image_sha256": "b75c3131476fd6425a1c1e91ed512cd64a3cc3f6a1a7bd2cab428b94547cbc06",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Complete red ESC faults:1/Over voltage strip fits under all four readings with status/header/page dots visible."
+    },
+    {
+      "runner": 202,
+      "size_mm": 42,
+      "simulator_name": "Apple Watch Series 10 (42mm)",
+      "mode": "demo-destination",
+      "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-destination.png",
+      "pixel_dimensions": [
+        374,
+        446
+      ],
+      "image_sha256": "8990f8b46d27ab9fc0032ca63666f74210355f27f3b45633612bd6e5b7861363",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Destination/DEMO SAMPLE POINTS and Launch/beach section clear; later editor controls continue below normal scroll viewport."
+    },
+    {
+      "runner": 202,
+      "size_mm": 42,
+      "simulator_name": "Apple Watch Series 10 (42mm)",
+      "mode": "demo-bms",
+      "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-bms.png",
+      "pixel_dimensions": [
+        374,
+        446
+      ],
+      "image_sha256": "d8184747f37be5dbfaea4ceb7226bf325031dfbdd9c55698cd89b33a52c6b3da",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "All12 identified C1...C12 measured sample voltages and units fit in four rows, with min3.814/max3.822V and spread8mV visible. Common DEMO SAMPLE DATA header explicit."
+    },
+    {
+      "runner": 202,
+      "size_mm": 42,
+      "simulator_name": "Apple Watch Series 10 (42mm)",
+      "mode": "demo-bms-unavailable",
+      "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-bms-unavailable.png",
+      "pixel_dimensions": [
+        374,
+        446
+      ],
+      "image_sha256": "0e0a18795020335d31a9fe86e6342458dbd81819951d92d70cc3e157412e940a",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "All12 cells remain unavailable dashes, with cell labels/units and Cell protocol not identified warning. No invented balanced pack summary; common DEMO label explicit."
+    },
+    {
+      "runner": 303,
+      "size_mm": 46,
+      "simulator_name": "Apple Watch Series 10 (46mm)",
+      "mode": "demo",
+      "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo.png",
+      "pixel_dimensions": [
+        416,
+        496
+      ],
+      "image_sha256": "25d278241af5aa83fa414877b507528a2f74f970aa0e47b1f131c89eb4f1f307",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Adjacent speed/compass and destination details, four equal caption-free readings with units, SAMPLE/REC and complete green ESC faults:None strip fit."
+    },
+    {
+      "runner": 303,
+      "size_mm": 46,
+      "simulator_name": "Apple Watch Series 10 (46mm)",
+      "mode": "demo-navigation",
+      "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-navigation.png",
+      "pixel_dimensions": [
+        416,
+        496
+      ],
+      "image_sha256": "36d6025208124f1f62263fe7216a0c7df7f642552ed940c247e77cc4fcd43fbc",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Shared compass/GPS course, distance/ETA and estimated arrival2%,reserve20%,short18% visible immediately; secondary details below scroll area."
+    },
+    {
+      "runner": 303,
+      "size_mm": 46,
+      "simulator_name": "Apple Watch Series 10 (46mm)",
+      "mode": "demo-fault",
+      "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-fault.png",
+      "pixel_dimensions": [
+        416,
+        496
+      ],
+      "image_sha256": "30cde0f3c9c5b4ff092ff39b1391c568f000ea30a167f2827c0255faf4ae13ad",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Complete red ESC faults:1/Over voltage strip fits under all four readings with status/header/page dots visible."
+    },
+    {
+      "runner": 303,
+      "size_mm": 46,
+      "simulator_name": "Apple Watch Series 10 (46mm)",
+      "mode": "demo-destination",
+      "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-destination.png",
+      "pixel_dimensions": [
+        416,
+        496
+      ],
+      "image_sha256": "e51baedc82c80796f33f0b084284a12e1d24bf362e5100ef65b9503f59b01bef",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "Destination/DEMO SAMPLE POINTS and Launch/beach section clear; later editor controls continue below normal scroll viewport."
+    },
+    {
+      "runner": 303,
+      "size_mm": 46,
+      "simulator_name": "Apple Watch Series 10 (46mm)",
+      "mode": "demo-bms",
+      "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-bms.png",
+      "pixel_dimensions": [
+        416,
+        496
+      ],
+      "image_sha256": "241ac6d14f6ff521000ee635f7f8e6405c34e761d029225e0820b8724ff4b8b7",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "All12 identified C1...C12 measured sample voltages and units fit in four rows, with min3.814/max3.822V and spread8mV visible. Common DEMO SAMPLE DATA header explicit."
+    },
+    {
+      "runner": 303,
+      "size_mm": 46,
+      "simulator_name": "Apple Watch Series 10 (46mm)",
+      "mode": "demo-bms-unavailable",
+      "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-bms-unavailable.png",
+      "pixel_dimensions": [
+        416,
+        496
+      ],
+      "image_sha256": "c3d76a8d3cf51c2070b7a8912a109e67f554f1a50a6da0d85e7fccbaf9551812",
+      "result": "PASS_WITHIN_REVIEW_SCOPE",
+      "finding": "All12 cells remain unavailable dashes, with cell labels/units and Cell protocol not identified warning. No invented balanced pack summary; common DEMO label explicit."
+    }
+  ],
+  "checks": [
+    "All18 images were individually viewed: six scenes at each of40/42/46mm. All3 artifact revision files match97d32aa.",
+    "All normal/fault dashboards retain equal large caption-free power/battery/ESC/voltage values and readable inline units. GPS speed and destination compass remain adjacent, and919m/03:00/arrival~64% fit beneath the arrow.",
+    "The always-visible ESC strip fits directly under the metrics on all3sizes. Healthy green None and active red code1/Over voltage are complete without clipping, overlapping status or hiding page indicators.",
+    "All3 navigation first viewports expose distance/ETA, arrival~2%,reserve20% and reserve short18% with shared compass/GPS course. Secondary battery time and setup controls may continue below the scroll viewport.",
+    "All3 sample BMS scenes show all12 C1...C12 entries with measured sample values and units in the first viewport; min/max/spread summary also fits. Common DEMO SAMPLE DATA header clearly marks synthetic readings.",
+    "All3 unavailable BMS scenes show12unavailable readings and the explicit Cell protocol not identified warning. No zeros, divided pack voltage or fabricated min/max/spread are displayed.",
+    "Original303 unavailable PNG was re-viewed at original detail after the tool preview appeared to lose tiny captions. Direct original-pixel inspection confirmed the C1 caption region retains the same53 visible-gray pixels as the sample frame; root original-detail review separately confirmed all cell captions and V units. No native missing-caption defect remains.",
+    "Destination editor scenes show explicit demo points and launch/beach section; remaining form rows follow normal scroll continuation.",
+    "Synthetic footer text can continue beneath the BMS scroll viewport; the common DEMO header remains visible throughout. This does not assert scroll/touch interaction."
+  ],
+  "prior_visual_revision": "9f384589ef5883c5cd919a3d641dcf9d49333648",
+  "open_defects": [],
+  "open_visual_defects": [],
+  "scope_exclusions": [
+    "Only these18 captured scenes/sizes are approved visually; other states, text sizes, long identity/fault labels or actual BLE screens are not covered.",
+    "Own-authored BMS manager/model/tests, protocol/BLE implementation and WidgetKit UI are excluded from this independent rendered-view approval.",
+    "Still images do not establish tapping/swiping, accessibility, coordinate/map editing, storage correctness or real telemetry transitions.",
+    "Native test/build/launch execution evidence is maintained separately; this report is actual rendered visual QA.",
+    "Actual individual-cell vendor decoding is pending BMS identity/protocol. Physical dual-BLE connection, real sensor measurements, signing/install, GPS/compass accuracy, prolonged background operation and on-water acceptance remain unverified."
+  ],
+  "hardware_acceptance": "EXCLUDED_AND_UNVERIFIED"
+}

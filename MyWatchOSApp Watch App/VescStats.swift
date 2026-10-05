@@ -8,19 +8,68 @@
 import Foundation
 import Combine
 
+enum BatteryPercentSource { case unknown, vesc, voltageEstimate, demo }
+
 final class VESCRtStats: ObservableObject {
     var batteryVoltage: Double = 0.0
     var inputCurrent: Double = 0.0
     var mosTemperature: Double = 0.0
-    var motorTemperature: Double = 0.0
+    var motorTemperature: Double = 0.0 // Retained for archive compatibility; no motor sensor is polled.
+    private(set) var faultCode: UInt8?
+    private var faultTimestamp: Date = .distantPast
+    /// Raw codes remain available for history; this label is only current for fresh validated telemetry.
+    var faultLabel: String? { faultIsAvailable() ? faultCode.map { VescFaultCode.label(for: $0) } : nil }
+    func faultIsAvailable(now: Date = Date()) -> Bool {
+        let age = now.timeIntervalSince(faultTimestamp)
+        return faultCode != nil && isFresh(now: now) && age >= 0 && age <= 6
+    }
+    func updateFaultCode(_ code: UInt8?, at date: Date = Date()) {
+        faultCode = code
+        faultTimestamp = code == nil ? .distantPast : date
+        objectWillChange.send()
+    }
     var wattHours: Double = 0.0
     var rpm: Double = 0.0
     var batteryPercent: Double = 0.0
+    private(set) var batteryPercentSource: BatteryPercentSource = .unknown
+    private var batteryPercentTimestamp: Date = .distantPast
+    var batteryPercentIsAvailable: Bool {
+        let age = Date().timeIntervalSince(batteryPercentTimestamp)
+        let selectedSource = batteryPercentSource == .demo ||
+            (BatteryConfig.useVescBatteryLevel ? batteryPercentSource == .vesc : batteryPercentSource == .voltageEstimate)
+        return selectedSource && age >= 0 && age <= 6
+    }
+    var batterySourceLabel: String {
+        switch batteryPercentSource {
+        case .vesc: return "VESC estimate"
+        case .voltageEstimate: return "Voltage estimate"
+        case .demo: return "Sample estimate"
+        case .unknown: return "Battery % unavailable"
+        }
+    }
+    func updateBatteryPercent(_ value: Double, source: BatteryPercentSource, at date: Date = .now) {
+        guard value.isFinite else { return }
+        batteryPercent = min(100, max(0, value))
+        batteryPercentSource = source
+        batteryPercentTimestamp = date
+        objectWillChange.send()
+    }
     /// Vehicle speed from VESC (m/s).
     var vescSpeed: Double = 0.0
     var isConnected: Bool = false
 
     private var lastUpdateTimestamp: Date = .distantPast
+    private(set) var lastTelemetryTimestamp: Date = .distantPast
+
+    func markTelemetryReceived(at date: Date = Date()) {
+        lastTelemetryTimestamp = date
+        objectWillChange.send()
+    }
+
+    func isFresh(now: Date = Date(), maxAge: TimeInterval = 6) -> Bool {
+        let age = now.timeIntervalSince(lastTelemetryTimestamp)
+        return isConnected && age >= 0 && age <= maxAge
+    }
 
     var timeSinceLastUpdate: TimeInterval {
         Date().timeIntervalSince(lastUpdateTimestamp)
@@ -28,7 +77,7 @@ final class VESCRtStats: ObservableObject {
 
     /// Instantaneous electrical power (W) from live voltage and current.
     var instantWatts: Double {
-        max(0, batteryVoltage * abs(inputCurrent))
+        max(0, batteryVoltage * inputCurrent)
     }
 
     func updateStats(
@@ -50,7 +99,7 @@ final class VESCRtStats: ObservableObject {
         if let motorTemperature { self.motorTemperature = motorTemperature }
         if let wattHours { self.wattHours = wattHours }
         if let rpm { self.rpm = rpm }
-        if let batteryPercent { self.batteryPercent = batteryPercent }
+        if let batteryPercent { updateBatteryPercent(batteryPercent, source: .demo) }
         if let vescSpeed { self.vescSpeed = vescSpeed }
         if let isConnected { self.isConnected = isConnected }
 
@@ -62,12 +111,17 @@ final class VESCRtStats: ObservableObject {
         inputCurrent = 0.0
         mosTemperature = 0.0
         motorTemperature = 0.0
+        faultCode = nil
+        faultTimestamp = .distantPast
         wattHours = 0.0
         rpm = 0.0
         batteryPercent = 0.0
+        batteryPercentSource = .unknown
+        batteryPercentTimestamp = .distantPast
         vescSpeed = 0.0
         isConnected = false
         lastUpdateTimestamp = .distantPast
+        lastTelemetryTimestamp = .distantPast
         objectWillChange.send()
     }
 }
