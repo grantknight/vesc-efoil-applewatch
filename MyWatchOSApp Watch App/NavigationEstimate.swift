@@ -167,9 +167,10 @@ enum NavigationFormat {
         guard let meters, meters.isFinite, meters >= 0 else { return "—" }
         // Tiers follow the rounded value, so 999.6 m reads "1.00 km" (not "1000 m") and
         // 9,996 m reads "10.0 km" (not "10.00 km").
-        if meters >= 9_995 { return String(format: "%.1f km", meters / 1000) }
+        // Round explicitly (half away from zero) so the preview's Math.round gives identical text.
+        if meters >= 9_995 { return String(format: "%.1f km", (meters / 100).rounded() / 10) }
         let wholeMeters = meters.rounded()
-        if wholeMeters >= 1000 { return String(format: "%.2f km", meters / 1000) }
+        if wholeMeters >= 1000 { return String(format: "%.2f km", (meters / 10).rounded() / 100) }
         return String(format: "%.0f m", wholeMeters)
     }
 

@@ -75,7 +75,7 @@ function navigation(){
  return {distance,eta,angle,arrival};
 }
 // Mirrors NavigationFormat in NavigationEstimate.swift.
-const distanceLabel=d=>d===null||!Number.isFinite(d)||d<0?'—':d>=9995?(d/1000).toFixed(1)+' km':Math.round(d)>=1000?(d/1000).toFixed(2)+' km':Math.round(d)+' m';
+const distanceLabel=d=>d===null||!Number.isFinite(d)||d<0?'—':d>=9995?(Math.round(d/100)/10).toFixed(1)+' km':Math.round(d)>=1000?(Math.round(d/10)/100).toFixed(2)+' km':Math.round(d)+' m';
 function compactDuration(s){if(s===null||!Number.isFinite(s)||s<0)return '—';const t=Math.round(s);if(t>=360000)return '—';if(t>=3600)return Math.floor(t/3600)+'h '+String(Math.floor(t%3600/60)).padStart(2,'0')+'m';return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');}
 // Mirrors ArrivalBatterySummary: percentages round down, shortfalls round up, exhaustion is explicit.
 function arrivalSummary(n){

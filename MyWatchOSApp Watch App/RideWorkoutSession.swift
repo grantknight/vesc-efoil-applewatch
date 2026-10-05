@@ -28,6 +28,21 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var recordingObserver: AnyCancellable?
+    private var startTimeout: Timer?
+
+    /// True until the one-time Health permission has been answered.
+    var needsPermission: Bool {
+        HKHealthStore.isHealthDataAvailable()
+            && healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .notDetermined
+    }
+
+    /// Asked from Settings ahead of a ride, so the sheet need not appear at the water's edge.
+    func requestPermission(completion: @escaping () -> Void = {}) {
+        guard needsPermission else { completion(); return }
+        healthStore.requestAuthorization(toShare: [HKObjectType.workoutType()], read: []) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.objectWillChange.send(); completion() }
+        }
+    }
 
     /// Starts and stops with the ride; the logger stays the single owner of recording state.
     func follow(_ logger: SessionLogger) {
@@ -45,10 +60,14 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
             return
         }
         status = .starting
-        // Sharing workouts is the permission a workout session requires. Nothing is saved.
-        healthStore.requestAuthorization(toShare: [HKObjectType.workoutType()], read: []) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.begin() }
+        // An unanswered permission sheet must not leave the ride claiming to start forever.
+        startTimeout?.invalidate()
+        startTimeout = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
+            guard let self, self.status == .starting else { return }
+            self.status = .unavailable("Background running did not start")
         }
+        // Sharing workouts is the permission a workout session requires. Nothing is saved.
+        requestPermission { [weak self] in self?.begin() }
     }
 
     private func begin() {
@@ -61,14 +80,16 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
             session.delegate = self
             self.session = session
+            // Status turns to running only when HealthKit confirms the session is running.
             session.startActivity(with: Date())
-            status = .running
         } catch {
+            startTimeout?.invalidate()
             status = .unavailable("Background running could not start")
         }
     }
 
     private func stop() {
+        startTimeout?.invalidate()
         status = .inactive
         let ending = session
         session = nil
@@ -77,9 +98,14 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState,
                         from fromState: HKWorkoutSessionState, date: Date) {
-        guard toState == .ended || toState == .stopped else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, workoutSession === self.session else { return }
+            if toState == .running {
+                self.startTimeout?.invalidate()
+                self.status = .running
+                return
+            }
+            guard toState == .ended || toState == .stopped else { return }
             // Ended by the system (for example another workout app took over) while still riding.
             self.session = nil
             self.status = .unavailable("Background running stopped")
@@ -89,6 +115,7 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         DispatchQueue.main.async { [weak self] in
             guard let self, workoutSession === self.session else { return }
+            self.startTimeout?.invalidate()
             self.session = nil
             self.status = .unavailable("Background running is not allowed")
         }

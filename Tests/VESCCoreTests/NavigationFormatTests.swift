@@ -67,4 +67,14 @@ final class NavigationFormatTests: XCTestCase {
         let invalid = ArrivalBatterySummary(prediction: prediction(arrival: 30, reserve: 0), reservePercent: .nan)
         XCTAssertEqual(invalid.detail, "Arrival ~30% · reserve 0%")
     }
+
+    func testDistanceRoundsHalfAwayFromZeroLikeThePreview() {
+        // Same text as the browser preview's Math.round at exact binary ties and unit edges.
+        XCTAssertEqual(NavigationFormat.distance(999.4), "999 m")
+        XCTAssertEqual(NavigationFormat.distance(999.5), "1.00 km")
+        XCTAssertEqual(NavigationFormat.distance(1125), "1.13 km")
+        XCTAssertEqual(NavigationFormat.distance(9994.9), "9.99 km")
+        XCTAssertEqual(NavigationFormat.distance(9995), "10.0 km")
+        XCTAssertEqual(NavigationFormat.distance(10250), "10.3 km")
+    }
 }

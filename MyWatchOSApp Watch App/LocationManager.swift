@@ -28,6 +28,7 @@ enum GPSSpeedUnit: String, CaseIterable, Identifiable {
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
+    private var recordingObserver: AnyCancellable?
     @Published var speedUnit: GPSSpeedUnit = .kph
     @Published var speed: Double = 0.0
     @Published var rawSpeedMs: Double = 0.0
@@ -90,10 +91,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.headingFilter = 3
-        // GPS keeps running with the wrist down while a ride's workout session is active.
-        // Setting this without the declared background mode would crash, so check first.
+        // GPS may keep running with the wrist down only while a ride records (its workout
+        // session keeps the app alive). Setting this without the declared background mode
+        // would crash, so check first.
         if (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true {
-            locationManager.allowsBackgroundLocationUpdates = true
+            recordingObserver = SessionLogger.shared.$isRecording.removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] recording in self?.locationManager.allowsBackgroundLocationUpdates = recording }
         }
         locationManager.requestWhenInUseAuthorization()
 

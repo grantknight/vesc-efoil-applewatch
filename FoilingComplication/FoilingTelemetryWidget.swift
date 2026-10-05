@@ -69,7 +69,7 @@ struct FoilingTelemetryWidgetView: View {
                             .gaugeStyle(.accessoryCircular)
                         } else {
                             VStack(spacing: 0) {
-                                Image(systemName: "battery.0")
+                                Image(systemName: "battery.0percent")
                                 Text("—").font(.headline)
                             }.accessibilityLabel("Battery percent unavailable")
                         }

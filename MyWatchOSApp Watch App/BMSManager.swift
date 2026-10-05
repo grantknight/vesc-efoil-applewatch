@@ -192,7 +192,12 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
 
     private func scheduleReconnect(_ id: UUID) {
         guard !demoMode, id != excludedID, reconnectAttempt < Self.maxReconnectAttempts else {
+            let wasReconnecting = reconnectID != nil
             cancelReconnect()
+            if wasReconnecting && selected == nil {
+                state = .unavailable
+                statusMessage = "Battery/BMS did not reconnect. Scan to connect again."
+            }
             return
         }
         reconnectID = id

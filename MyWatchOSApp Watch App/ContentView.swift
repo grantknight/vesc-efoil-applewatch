@@ -544,7 +544,7 @@ private struct MapPointPickerView: View {
             if zoomedInEnough {
                 Text(String(format: "%.5f, %.5f", region.center.latitude, region.center.longitude)).font(.caption2).monospacedDigit()
             } else {
-                Text("No GPS fix. Zoom in on your spot.").font(.caption2).foregroundStyle(.orange)
+                Text(hasStartingPoint ? "Zoom in to place the pin." : "No GPS fix. Zoom in on your spot.").font(.caption2).foregroundStyle(.orange)
             }
             Button("Save \(pointKind.title) here") {
                 guard zoomedInEnough, region.center.latitude.isFinite, region.center.longitude.isFinite, CLLocationCoordinate2DIsValid(region.center) else { return }
@@ -558,6 +558,9 @@ private struct MapPointPickerView: View {
     /// Roughly 20 km tall or closer. Normal use opens at about 3 km, so this only blocks
     /// saving from the zoomed-out view shown when there is no fix or saved point.
     private var zoomedInEnough: Bool { region.span.latitudeDelta <= 0.2 }
+    private var hasStartingPoint: Bool {
+        currentCoordinate != nil || destinationManager.launchCoordinate != nil || destinationManager.finishCoordinate != nil
+    }
 }
 
 struct SettingsView: View {
@@ -573,10 +576,18 @@ struct SettingsView: View {
     @State private var useVescBattery = BatteryConfig.useVescBatteryLevel
     @State private var showDestinationPicker = false
     @State private var showBMS = false
+    @ObservedObject private var workout = RideWorkoutSession.shared
 
     var body: some View {
         NavigationStack {
             Form {
+                if workout.needsPermission {
+                    Section("Wrist-down logging") {
+                        Button("Allow background ride logging") { workout.requestPermission() }
+                        Text("One-time Health permission so a recording ride keeps logging with your wrist down. Nothing is saved to Health.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
                 Section("GPS") {
                     Toggle("Enable GPS", isOn: Binding(
                         get: { locationManager.isEnabled() },
