@@ -15,9 +15,16 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}`;
 mkdirSync('verification/preview', { recursive: true });
 const launchOptions = { headless: true };
+if (process.env.PLAYWRIGHT_CHANNEL && process.env.PLAYWRIGHT_EXECUTABLE) {
+  throw new Error('Set PLAYWRIGHT_CHANNEL or PLAYWRIGHT_EXECUTABLE, not both; their precedence is Playwright-version-dependent.');
+}
 if (process.env.PLAYWRIGHT_CHANNEL) launchOptions.channel = process.env.PLAYWRIGHT_CHANNEL;
 if (process.env.PLAYWRIGHT_EXECUTABLE) launchOptions.executablePath = process.env.PLAYWRIGHT_EXECUTABLE;
 const browser = await chromium.launch(launchOptions);
+// Recorded so a PASS names the exact browser that produced it.
+const browserIdentity = { name: browser.browserType().name(), version: browser.version(),
+  channel: process.env.PLAYWRIGHT_CHANNEL ?? null, executable: process.env.PLAYWRIGHT_EXECUTABLE ?? null,
+  package: process.env.PLAYWRIGHT_PACKAGE ?? 'playwright' };
 const results = [];
 try {
   for (const [pass, width] of [[1, 1280], [2, 736], [3, 320]]) {
@@ -223,7 +230,7 @@ try {
   results.push({ result: 'FAIL', error: error.message, stack: error.stack }); process.exitCode = 1;
 } finally {
   await browser.close(); server.close();
-  const report = { source_sha256: createHash('sha256').update(source).digest('hex'), executed_at: new Date().toISOString(), results, status: results.length===3 && results.every(r=>r.result==='PASS') ? 'PASS' : 'FAIL' };
+  const report = { source_sha256: createHash('sha256').update(source).digest('hex'), executed_at: new Date().toISOString(), browser: browserIdentity, results, status: results.length===3 && results.every(r=>r.result==='PASS') ? 'PASS' : 'FAIL' };
   writeFileSync('verification/preview/results.json', JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 }

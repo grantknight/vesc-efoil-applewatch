@@ -140,7 +140,7 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         clearConnection()
         guard centralManager.state == .poweredOn else { state = .off; return }
         state = .scanningIdle
-        connectionMessage = "Connection cancelled"
+        connectionMessage = ""
     }
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard centralManager === central else { return }
