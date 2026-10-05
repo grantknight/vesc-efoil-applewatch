@@ -1,5 +1,21 @@
 # Verification record
 
+## Review and UI refinement, 5 October 2026 (branch `codex/review-and-ui-refinement`)
+
+Application source: `58352ba5fab0b5edba3c320d21915efaaf6b2f52` (base `main` `8c43c20`). Changes: Sport dashboard hierarchy and destination block, compass dial, wrist-down (Always-On) state, arrival-battery summary levels, cancel-connection and Change VESC fixes, 12S default voltage estimate, snapshot speed at publish time, ride-save clock clamp, heading smoothing reset, history speed unit, BMS label size, spoken units. Full review: `2026-10-05-code-review.md` in the project files.
+
+What actually ran:
+
+- **macOS CI**, [run 37282422759](https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37282422759) on the previous head `a8bded5`: all three jobs (101/202/303) succeeded, including `swift test --parallel`, Watch + complication simulator build and the six-scene simulator launch/screenshot step. [Run 37283251776](https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37283251776) on `58352ba`: in progress when this record was written (see the PR checks). The new tests (`NavigationFormatTests`, 7; `BatteryConfigTests`, 1) bring the suite to 85 XCTest cases; step conclusions were read through the API, but job logs and artifacts could not be downloaded from this environment (blob host 403), so the executed count was not read from the log.
+- **Browser preview**, Linux Chromium 141 via Playwright: `node preview/test_preview.cjs` PASS; `scripts/preview-test.mjs` PASS, 107 assertions at each of 1280/736/320 (321 total), zero JavaScript errors, source SHA-256 `d5b0c07f85aa4fc5e273a31bd0cc0841ea976b1fc98f9a1c206167148bda9831`. See [preview-results.json](verification/2026-10-05/preview-results.json) and the before/after preview images in [verification/2026-10-05](verification/2026-10-05/).
+- **Independent review** of the diff by a separate agent: APPROVE WITH NITS; findings and fixes in [independent-review.md](verification/2026-10-05/independent-review.md).
+
+Not done, and why:
+
+- **Native visual review**: the new simulator screenshots exist only as CI artifacts, which this environment cannot download. They must be inspected before the 14-day artifact expiry, especially the 40 mm destination caption (review item L3).
+- **Jev**: not run. `OPENROUTER_API_KEY` is not available here and the gate needs locally hashed CI artifacts. There is no Jev PASS for this revision.
+- **Hardware**: no Watch, VESC, BMS, GPS or water testing. The wrist-down state is based on watchOS Always-On behaviour and is unverified on a device.
+
 ## Verified implementation, 4 October 2026
 
 Application source: `97d32aa134fb9502c9b8b8948c6389d7db390dcc`.

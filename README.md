@@ -49,7 +49,7 @@ Motor temperature is no longer polled or displayed. Legacy ride and snapshot fie
 
 ## Verification
 
-`swift test` runs the Foundation-only protocol and persistence suite, including 3,000 seeded packet-fragmentation cases. `TEST_SEED=101`, `202` and `303` exercise different reproducible inputs. GitHub Actions performs three independent clean core-test, Watch/complication simulator-build and simulator-launch runs on the same commit. `node Tests/jev-gate.test.mjs` tests the evidence gate without a network request. Browser behavior checks are in `scripts/preview-test.mjs` and `preview/test_preview.cjs`.
+`swift test` runs the Foundation-only protocol and persistence suite, including 3,000 seeded packet-fragmentation cases. `TEST_SEED=101`, `202` and `303` exercise different reproducible inputs. GitHub Actions performs three independent clean core-test, Watch/complication simulator-build and simulator-launch runs on the same commit. `node Tests/jev-gate.test.mjs` tests the evidence gate without a network request. Browser behavior checks are in `scripts/preview-test.mjs` and `preview/test_preview.cjs`. The Playwright suite runs on any platform with `PLAYWRIGHT_PACKAGE=/path/to/playwright node scripts/preview-test.mjs` (optional `PLAYWRIGHT_CHANNEL` or `PLAYWRIGHT_EXECUTABLE`).
 
 Jev assessments use OpenRouter's Decisions API and an existing `OPENROUTER_API_KEY` environment variable. Jev classifies recorded executed evidence; it does not execute tests, inspect screenshots or replace hardware validation. `scripts/jev-gate.mjs` requires named category results at one revision and never allows a model decision to override a failed local gate. Results are saved under ignored `verification/`; no API credential is stored in the repository.
 

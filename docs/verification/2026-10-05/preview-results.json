@@ -1,0 +1,34 @@
+{
+  "source_sha256": "d5b0c07f85aa4fc5e273a31bd0cc0841ea976b1fc98f9a1c206167148bda9831",
+  "executed_at": "2026-10-05T08:23:51.699Z",
+  "browser": {
+    "name": "chromium",
+    "version": "141.0.7390.37",
+    "channel": null,
+    "executable": null
+  },
+  "results": [
+    {
+      "pass": 1,
+      "width": 1280,
+      "assertions": 107,
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "pass": 2,
+      "width": 736,
+      "assertions": 107,
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "pass": 3,
+      "width": 320,
+      "assertions": 107,
+      "errors": [],
+      "result": "PASS"
+    }
+  ],
+  "status": "PASS"
+}
