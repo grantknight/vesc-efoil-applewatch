@@ -29,6 +29,7 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
     private var session: HKWorkoutSession?
     private var recordingObserver: AnyCancellable?
     private var startTimeout: Timer?
+    private var rideRecording = false
 
     /// True until the one-time Health permission has been answered.
     var needsPermission: Bool {
@@ -53,7 +54,14 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
             }
     }
 
+    /// Answered in Settings > Health on the Watch once declined; the app cannot ask again.
+    var permissionDenied: Bool {
+        HKHealthStore.isHealthDataAvailable()
+            && healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .sharingDenied
+    }
+
     private func start() {
+        rideRecording = true
         guard session == nil, status != .starting else { return }
         guard HKHealthStore.isHealthDataAvailable() else {
             status = .unavailable("Background running unavailable on this Watch")
@@ -71,8 +79,9 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
     }
 
     private func begin() {
-        // The ride may have been saved while the permission sheet was showing.
-        guard status == .starting else { return }
+        // The ride may have been saved while the permission sheet was showing; a late answer
+        // after the 30 s timeout still starts the session while the ride is recording.
+        guard rideRecording, session == nil, status != .running else { return }
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .waterSports
         configuration.locationType = .outdoor
@@ -89,6 +98,7 @@ final class RideWorkoutSession: NSObject, ObservableObject, HKWorkoutSessionDele
     }
 
     private func stop() {
+        rideRecording = false
         startTimeout?.invalidate()
         status = .inactive
         let ending = session

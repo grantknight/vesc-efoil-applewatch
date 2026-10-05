@@ -587,6 +587,11 @@ struct SettingsView: View {
                         Text("One-time Health permission so a recording ride keeps logging with your wrist down. Nothing is saved to Health.")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
+                } else if workout.permissionDenied {
+                    Section("Wrist-down logging") {
+                        Text("Off. Allow Foil Assist in the Health privacy settings to keep logging with your wrist down.")
+                            .font(.caption2).foregroundStyle(.orange)
+                    }
                 }
                 Section("GPS") {
                     Toggle("Enable GPS", isOn: Binding(
