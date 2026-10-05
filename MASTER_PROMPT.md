@@ -8,6 +8,23 @@ Continue developing this repository without requiring Grant to repeat the conver
 
 The most recently fully verified **application source** (CI, native screenshot review and three Jev PASS) is commit `97d32aa134fb9502c9b8b8948c6389d7db390dcc`, dated 4 October 2026. On 5 October a code review, UI refinement and battle-testing pass was made on branch `codex/review-and-ui-refinement` (draft PR #4 against `main`; see the verification record for exact commits). It passed macOS CI, the browser suites and independent diff reviews, but its native screenshots have not been visually reviewed and it has no Jev decisions; treat it as unaccepted until Grant merges it. See [the verification record](docs/VERIFICATION.md) for exact scope and immutable retained receipts.
 
+## Where we stopped (5 October 2026): pick up here
+
+All work so far is committed and pushed on branch **`codex/review-and-ui-refinement`** (draft **PR #4**, not yet merged into `main`). Check out that branch, not `main`, to continue. Final application commit `3707a2c`; macOS CI [run 37291208760](https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37291208760) passed all three jobs on it. Later commits on the branch change documentation only.
+
+Done on the branch: code review fixes, refined Sport dashboard (approved by Grant from browser renders), 13 seeded stress tests (99 XCTest cases by source count), wrist-down background running through a water-sports workout session, BMS auto-reconnect, compass/map/complication fixes, 12S page renders, two independent reviews (APPROVE WITH NITS). Details: [docs/VERIFICATION.md](docs/VERIFICATION.md).
+
+Still to do, in order (each needs something the cloud environment lacks):
+
+1. **Native screenshots** (needs a Mac or a fresh CI run you can download): inspect the 40/42/46 mm simulator screenshots from the latest CI run on the branch, especially the 40 mm destination caption and the wrist-down scene. CI artifacts expire 14 days after each run; re-run the workflow if they have expired.
+2. **Jev** (needs `OPENROUTER_API_KEY`, on Grant's Mac): three clean decisions for the exact application head, per the workflow below. Fix real failures; never retry for a PASS.
+3. **Merge PR #4** once Grant is satisfied with 1 and 2. Grant decides.
+4. **BMS identity** (needs Grant): brand, model, firmware or the phone app it uses. Then add the read-only vendor cell decoder (item 1 under "Next work"). Until then live C1–C12 values stay blank; the populated page is sample data.
+5. **On a Watch** (needs Mac, Apple signing, Watch, VESC and BMS): enable the HealthKit capability, install, then run every check in [MAC_HANDOFF.md](MAC_HANDOFF.md), especially wrist-down logging, the Health prompt, background GPS, BMS reconnect and both Bluetooth links at once.
+6. **Optional improvements** (not started): progress-based arrival estimate; quarantining an unreadable ride archive instead of blocking storage; a visible control to stop a pending BMS reconnect; recovering a workout session after a crash; wording when the excluded VESC is the reconnect target (last review nit).
+
+Grant's working preference: he wants one finished package, not interim questions. Pick sensible defaults, record them here, and report once.
+
 ## Purpose and intended outcome
 
 Grant is building a full-drive e-foil/e-flow assist system using a VESC controller. Foil Assist is a standalone **Apple Watch** app for critical information while in the water, without needing a phone during use. Prioritize rapid outdoor readability, dependable freshness, clear controller errors, navigation back to a beach/launch point or toward a downwind finish, and useful persistent ride records.
@@ -119,4 +136,4 @@ For future code changes: reproduce the affected outcome, implement, run appropri
 
 ## Compact continuation prompt
 
-> Continue Grant Knight's Foil Assist VESC Apple Watch project from this repository. Read AGENTS.md, MASTER_PROMPT.md, README.md, MAC_HANDOFF.md and docs/VERIFICATION.md first. Preserve the approved Sport dashboard, ESC-only temperature and permanent freshness-aware fault strip, adjacent GPS/destination compass with arrival reserve, atomic persistent ride history, complication, and independent 12S BMS connection. The native app is simulator-verified; live vendor cell decoding awaits BMS identity, and physical Watch/on-water acceptance is unfinished. Use actual evidence and independent review, keep demo/live data isolated, and obtain the requested three clean Jev evidence decisions for a changed implementation without inventing results. Update this handover when state changes.
+> Continue Grant Knight's Foil Assist VESC Apple Watch project from this repository, on branch `codex/review-and-ui-refinement` (PR #4) until it is merged. Start with "Where we stopped" in MASTER_PROMPT.md. Read AGENTS.md, MASTER_PROMPT.md, README.md, MAC_HANDOFF.md and docs/VERIFICATION.md first. Preserve the approved Sport dashboard, ESC-only temperature and permanent freshness-aware fault strip, adjacent GPS/destination compass with arrival reserve, atomic persistent ride history, complication, and independent 12S BMS connection. The native app is simulator-verified; live vendor cell decoding awaits BMS identity, and physical Watch/on-water acceptance is unfinished. Use actual evidence and independent review, keep demo/live data isolated, and obtain the requested three clean Jev evidence decisions for a changed implementation without inventing results. Update this handover when state changes.
