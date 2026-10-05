@@ -35,8 +35,6 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
     private var lastWidgetReload = Date.distantPast
-    private var lastSnapshotSpeed: Double?
-    private var lastSnapshotUnit = "mph"
     private var wasFresh = false
     private var connectedAt: Date?
     private let packet = Packet()
@@ -53,6 +51,10 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     lazy var sessionLogger = SessionLogger.shared
     /// Returns fresh GPS speed in m/s. nil means unavailable, never propeller speed.
     var gpsSpeedProvider: (() -> Double?)?
+    /// Returns the current display-unit GPS speed, nil speed when no fresh fix exists.
+    /// Queried at publish time so a silent GPS stall can never freeze a live-looking speed
+    /// into the shared snapshot while telemetry keeps refreshing updatedAt.
+    var displaySpeedProvider: (() -> (speed: Double?, unit: GPSSpeedUnit))?
     var telemetryIsFresh: Bool { state == .connected && vescRtStats.isFresh() }
     /// Also excludes the saved controller while it is temporarily disconnected.
     var selectedPeripheralID: UUID? {
@@ -337,15 +339,11 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         }
         objectWillChange.send()
     }
-    func publishTelemetrySnapshot(displaySpeed: Double?, speedUnit: GPSSpeedUnit) {
-        lastSnapshotSpeed = displaySpeed
-        lastSnapshotUnit = speedUnit.rawValue
-        publishCurrentSnapshot()
-    }
     private func publishCurrentSnapshot(forceReload: Bool = false) {
         var snapshot = TelemetrySnapshot()
-        snapshot.speed = lastSnapshotSpeed
-        snapshot.speedUnit = lastSnapshotUnit
+        let display = displaySpeedProvider?()
+        snapshot.speed = display?.speed
+        snapshot.speedUnit = (display?.unit ?? .mph).rawValue
         snapshot.watts = vescRtStats.instantWatts
         snapshot.batteryPercent = vescRtStats.batteryPercentIsAvailable ? vescRtStats.batteryPercent : nil
         snapshot.batteryVoltage = vescRtStats.batteryVoltage

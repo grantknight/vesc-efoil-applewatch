@@ -276,13 +276,15 @@ struct Home: View {
                 guard let locationManager, locationManager.hasFreshSpeed else { return nil }
                 return locationManager.smoothedSpeedMs
             }
+            bluetoothManager.displaySpeedProvider = { [weak locationManager] in
+                guard let locationManager else { return (nil, .mph) }
+                return (locationManager.hasFreshSpeed ? locationManager.speed : nil, locationManager.speedUnit)
+            }
         }
         .onDisappear {
             locationManager.stop()
             bluetoothManager.gpsSpeedProvider = nil
-        }
-        .onChange(of: locationManager.speed) { _, _ in
-            bluetoothManager.publishTelemetrySnapshot(displaySpeed: displaySpeed, speedUnit: speedUnit)
+            bluetoothManager.displaySpeedProvider = nil
         }
         .onChange(of: rtStats.lastTelemetryTimestamp) { _, timestamp in
             arrivalEstimator.observe(percent: rtStats.batteryPercentIsAvailable ? rtStats.batteryPercent : nil,
