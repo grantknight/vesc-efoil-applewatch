@@ -77,17 +77,20 @@ struct BMSCellsView: View {
                         LazyVGrid(columns: columns, spacing: 2) {
                             ForEach(0..<12) { index in
                                 let voltage = currentSnapshot?.cellVoltages[index]
+                                // The lowest cell limits the pack, so it is outlined (matching the preview).
+                                let isLowest = voltage != nil && voltage == currentSnapshot?.minVoltage
                                 VStack(spacing: 0) {
-                                    Text("C\(index + 1)").font(.system(size: 6, weight: .semibold)).foregroundStyle(.secondary)
+                                    Text("C\(index + 1)").font(.system(size: 8, weight: .bold)).foregroundStyle(Color(white: 0.72))
                                     HStack(alignment: .firstTextBaseline, spacing: 1) {
                                         Text(voltage.map { String(format: "%.3f", $0) } ?? "—")
-                                            .font(.system(size: min(14, max(10, rowHeight * 0.46)), weight: .bold, design: .rounded)).monospacedDigit()
+                                            .font(.system(size: min(14, max(10, rowHeight * 0.44)), weight: .bold, design: .rounded)).monospacedDigit()
                                         Text("V").font(.system(size: 8, weight: .semibold))
-                                    }.lineLimit(1).minimumScaleFactor(0.85)
+                                    }.lineLimit(1).minimumScaleFactor(0.8)
                                 }.frame(maxWidth: .infinity).frame(height: rowHeight)
                                     .background(Color.mint.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(isLowest ? SportPalette.caution : .clear, lineWidth: 1))
                                     .accessibilityElement(children: .ignore)
-                                    .accessibilityLabel("Cell \(index + 1), \(voltage.map { String(format: "%.3f volts", $0) } ?? "unavailable")")
+                                    .accessibilityLabel("Cell \(index + 1), \(voltage.map { String(format: "%.3f volts", $0) } ?? "unavailable")\(isLowest ? ", lowest" : "")")
                             }
                         }
                         if let currentSnapshot {

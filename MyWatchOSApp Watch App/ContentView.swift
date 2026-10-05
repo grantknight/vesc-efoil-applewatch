@@ -74,7 +74,9 @@ private struct ConnectionScreen: View {
                             }
                             if bluetoothManager.state != .off {
                                 Button(bluetoothManager.state == .connecting ? "Cancel connection" : "Scan again") {
-                                    bluetoothManager.restart(withNewDevice: bluetoothManager.state == .connecting)
+                                    // Cancelling keeps the saved controller and any active ride.
+                                    if bluetoothManager.state == .connecting { bluetoothManager.cancelConnectionAttempt() }
+                                    else { bluetoothManager.restart() }
                                 }
                             }
                         }
@@ -133,6 +135,7 @@ struct Home: View {
     @State private var tabSelected = 0
     @State private var sheet: HomeSheet?
     @State private var confirmSave = false
+    @State private var confirmChangeVESC = false
     @State private var arrivalEstimator = ArrivalBatteryEstimator()
     @StateObject private var locationManager = LocationManager()
     @StateObject private var destinationManager = DestinationManager()
@@ -159,13 +162,8 @@ struct Home: View {
         guard rtStats.isFresh(), rtStats.batteryPercentIsAvailable, locationManager.hasFreshSpeed else { return "Fresh battery and GPS observations are required" }
         return arrivalEstimator.predictionUnavailableReason(etaSeconds: eta, reservePercent: destinationManager.reservePercent) ?? "Measured consumption estimate"
     }
-    private var dashboardArrival: String {
-        if let prediction {
-            if prediction.willExhaustBeforeArrival { return "Runs out before arrival" }
-            if prediction.reserveShortfallPercent > 0 { return String(format: "Arrival ~%.0f%% · short %.0f%%", floor(max(0, prediction.arrivalPercent)), ceil(prediction.reserveShortfallPercent)) }
-            return String(format: "Arrival ~%.0f%%", floor(max(0, prediction.arrivalPercent)))
-        }
-        return "Arrival battery —"
+    private var arrival: ArrivalBatterySummary {
+        ArrivalBatterySummary(prediction: prediction, reservePercent: destinationManager.reservePercent)
     }
 
     var body: some View {
@@ -178,10 +176,10 @@ struct Home: View {
                     isRecording: logger.isRecording, now: Date(),
                     directionAngle: destinationManager.arrowAngle(current: freshCoordinate, heading: locationManager.directionHeading),
                     directionReference: locationManager.directionReference,
-                    navigationDistance: destinationManager.formattedDistance(remainingDistance).replacingOccurrences(of: "Distance: ", with: ""),
-                    destinationETA: destinationManager.formattedETA(eta).replacingOccurrences(of: "ETA: ", with: ""),
-                    arrivalBatterySummary: dashboardArrival,
-                    reserveWarning: (prediction?.reserveShortfallPercent ?? 0) > 0,
+                    hasDestination: destinationManager.destination != nil,
+                    navigationDistance: NavigationFormat.distance(remainingDistance),
+                    destinationETA: NavigationFormat.duration(eta),
+                    arrival: arrival,
                     onDestinationTap: { sheet = .destination }
                 )
             }.tag(0)
@@ -220,7 +218,11 @@ struct Home: View {
                             Text("Recording pauses telemetry during connection gaps.").font(.caption2).foregroundStyle(.secondary)
                         } else {
                             Text("Ready when you are.").font(.caption).foregroundStyle(.secondary)
-                            Button("Start ride") { logger.startRide() }
+                            Button("Start ride") {
+                                logger.startRide()
+                                // Water Lock disables swiping, so riding starts on the dashboard.
+                                if logger.isRecording { tabSelected = 0 }
+                            }
                                 .disabled(!rtStats.isFresh())
                                 .tint(.cyan)
                             Text("Start after live telemetry arrives. Ride data saves on this Watch.")
@@ -246,7 +248,14 @@ struct Home: View {
                 VStack(spacing: 10) {
                     Label("Foil Assist", systemImage: "water.waves").font(.headline).foregroundStyle(.cyan)
                     Button("Settings") { sheet = .settings }
-                    Button("Connect VESC", action: showConnection)
+                    Button(bluetoothManager.state == .connected ? "Change VESC" : "Connect VESC") {
+                        // A live link is only dropped after confirmation.
+                        if bluetoothManager.telemetryIsFresh { confirmChangeVESC = true } else { showConnection() }
+                    }
+                    .alert("Disconnect the live VESC?", isPresented: $confirmChangeVESC) {
+                        Button("Disconnect", role: .destructive, action: showConnection)
+                        Button("Keep connected", role: .cancel) {}
+                    } message: { Text("Telemetry stops while you choose a controller. An active ride records a gap.") }
                     Button("Connect battery BMS") {
                         bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
                         sheet = .bms
@@ -276,13 +285,15 @@ struct Home: View {
                 guard let locationManager, locationManager.hasFreshSpeed else { return nil }
                 return locationManager.smoothedSpeedMs
             }
+            bluetoothManager.displaySpeedProvider = { [weak locationManager] in
+                guard let locationManager else { return (nil, .kph) }
+                return (locationManager.hasFreshSpeed ? locationManager.speed : nil, locationManager.speedUnit)
+            }
         }
         .onDisappear {
             locationManager.stop()
             bluetoothManager.gpsSpeedProvider = nil
-        }
-        .onChange(of: locationManager.speed) { _, _ in
-            bluetoothManager.publishTelemetrySnapshot(displaySpeed: displaySpeed, speedUnit: speedUnit)
+            bluetoothManager.displaySpeedProvider = nil
         }
         .onChange(of: rtStats.lastTelemetryTimestamp) { _, timestamp in
             arrivalEstimator.observe(percent: rtStats.batteryPercentIsAvailable ? rtStats.batteryPercent : nil,
@@ -320,43 +331,52 @@ struct NavigationSummaryView: View {
     var usesSampleData = false
     @State private var showEditor = false
 
+    private var arrival: ArrivalBatterySummary {
+        ArrivalBatterySummary(prediction: prediction, reservePercent: destinationManager.reservePercent)
+    }
+    private var arrivalColor: Color {
+        switch arrival.level {
+        case .exhaustedBeforeArrival: return SportPalette.fault
+        case .belowReserve: return SportPalette.caution
+        case .aboveReserve: return SportPalette.accent
+        case .unavailable: return SportPalette.caution
+        }
+    }
+
     var body: some View {
             ScrollView {
                 VStack(spacing: 4) {
                     Text(destinationManager.destination == nil ? "Choose destination" : destinationManager.destinationName)
-                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.mint).lineLimit(1).minimumScaleFactor(0.8)
+                        .font(.system(size: 14, weight: .bold)).foregroundStyle(SportPalette.accent).lineLimit(1).minimumScaleFactor(0.8)
                     let angle = destinationManager.arrowAngle(current: currentCoordinate, heading: heading)
-                    HStack(spacing: 7) {
+                    HStack(spacing: 8) {
                         Button { showEditor = true } label: {
-                            DestinationCompassNeedle(angle: angle, color: .mint)
-                                .frame(width: 28, height: 28)
+                            DestinationCompassNeedle(angle: angle, color: SportPalette.accent)
+                                .frame(width: 54, height: 54)
                         }.buttonStyle(.plain).accessibilityLabel("Destination setup")
-                        Text(angle == nil ? "Direction unavailable" : directionReference)
-                            .font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary).lineLimit(2)
-                    }.frame(height: 28)
-                    Text(destinationManager.formattedDistance(destinationManager.distance(from: currentCoordinate)).replacingOccurrences(of: "Distance: ", with: "") + " · " + destinationManager.formattedETA(eta))
-                        .font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                    if let prediction {
-                        Text(String(format: "Arrival ~%.0f%% · reserve %.0f%%", floor(max(0, prediction.arrivalPercent)), destinationManager.reservePercent))
-                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(prediction.reserveShortfallPercent > 0 ? Color.orange : Color.mint)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        if prediction.willExhaustBeforeArrival {
-                            Text("Battery may run out before arrival").font(.system(size: 9, weight: .bold)).foregroundStyle(.red).lineLimit(2)
-                        }
-                        if prediction.reserveShortfallPercent > 0 {
-                            Text(String(format: "Reserve short by %.0f%%", ceil(prediction.reserveShortfallPercent)))
-                                .font(.system(size: 10, weight: .bold)).foregroundStyle(.orange)
-                        }
-                    } else {
-                        Text("Arrival battery unavailable").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
-                        Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.system(size: 10))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(NavigationFormat.distance(destinationManager.distance(from: currentCoordinate)))
+                                .font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit()
+                            Text("ETA " + NavigationFormat.duration(eta))
+                                .font(.system(size: 13, weight: .semibold, design: .rounded)).monospacedDigit()
+                            Text(angle == nil ? "Direction unavailable" : directionReference)
+                                .font(.system(size: 10, weight: .medium)).foregroundStyle(SportPalette.secondaryText)
+                        }.lineLimit(1).minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Button("Destination setup") { showEditor = true }.font(.caption).tint(.mint).padding(.top, 4)
+                    Text(arrival.detail)
+                        .font(.system(size: 12, weight: .bold)).foregroundStyle(arrivalColor)
+                        .lineLimit(2).minimumScaleFactor(0.8)
+                        .accessibilityLabel(arrival.spoken)
+                    if arrival.level == .unavailable {
+                        Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.system(size: 11))
+                    }
+                    Button("Destination setup") { showEditor = true }.font(.caption).tint(SportPalette.accent).padding(.top, 4)
                     if let prediction {
-                        Text("Battery time ~" + durationText(prediction.secondsUntilEmpty)).font(.caption)
+                        Text("Battery time ~" + NavigationFormat.duration(prediction.secondsUntilEmpty)).font(.caption)
                         if prediction.depletionPercentPerSecond.isFinite, prediction.depletionPercentPerSecond > 0 {
                             let untilReserve = max(0, prediction.secondsUntilEmpty - destinationManager.reservePercent / prediction.depletionPercentPerSecond)
-                            Text("To reserve ~" + durationText(untilReserve)).font(.caption2)
+                            Text("To reserve ~" + NavigationFormat.duration(untilReserve)).font(.caption2)
                         }
                         Text("Estimated time to empty from recent consumption.").font(.caption2).foregroundStyle(.secondary)
                     } else {
@@ -369,10 +389,6 @@ struct NavigationSummaryView: View {
                 .sheet(isPresented: $showEditor) {
                     DestinationPickerView(destinationManager: destinationManager, currentCoordinate: currentCoordinate, usesSampleData: usesSampleData)
                 }
-    }
-
-    private func durationText(_ seconds: TimeInterval) -> String {
-        destinationManager.formattedETA(max(0, seconds)).replacingOccurrences(of: "ETA: ", with: "")
     }
 }
 

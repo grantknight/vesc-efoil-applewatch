@@ -37,7 +37,6 @@ final class DestinationManager: ObservableObject {
     private let storageKey = "NAV_DESTINATION"
     private let launchStorageKey = "NAV_LAUNCH"
     private let persists: Bool
-    private var smoothedEtaSecondsValue: TimeInterval?
 
     init(persists: Bool = true) {
         self.persists = persists
@@ -49,13 +48,11 @@ final class DestinationManager: ObservableObject {
         finishCoordinate = coordinate
         finishName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Finish" : name
         destinationKind = .finish
-        smoothedEtaSecondsValue = nil
         save()
     }
 
     func clearDestination() {
         finishCoordinate = nil
-        if destinationKind == .finish { smoothedEtaSecondsValue = nil }
         if persists { UserDefaults.standard.removeObject(forKey: storageKey); saveSelection() }
     }
 
@@ -63,27 +60,24 @@ final class DestinationManager: ObservableObject {
         guard Self.validCoordinate(coordinate) else { return }
         launchCoordinate = coordinate
         launchName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Launch / beach" : name
-        if destinationKind == .launch { smoothedEtaSecondsValue = nil }
         savePoint(coordinate, name: launchName, key: launchStorageKey)
     }
 
     func selectReturnToLaunch() {
         guard launchCoordinate != nil else { return }
         destinationKind = .launch
-        smoothedEtaSecondsValue = nil
         saveSelection()
     }
 
     func selectFinish() {
         guard finishCoordinate != nil else { return }
         destinationKind = .finish
-        smoothedEtaSecondsValue = nil
         saveSelection()
     }
 
     func clearLaunchPoint() {
         launchCoordinate = nil
-        if destinationKind == .launch { destinationKind = .finish; smoothedEtaSecondsValue = nil }
+        if destinationKind == .launch { destinationKind = .finish }
         if persists { UserDefaults.standard.removeObject(forKey: launchStorageKey); saveSelection() }
     }
 
@@ -108,43 +102,6 @@ final class DestinationManager: ObservableObject {
 
     func etaSeconds(distanceMeters: Double?, speedMs: Double) -> TimeInterval? {
         NavigationEstimate.etaSeconds(distanceMeters: distanceMeters, speedMs: speedMs)
-    }
-
-    func smoothedETA(distanceMeters: Double?, speedMs: Double) -> TimeInterval? {
-        guard let eta = etaSeconds(distanceMeters: distanceMeters, speedMs: speedMs) else {
-            smoothedEtaSecondsValue = nil
-            return nil
-        }
-
-        if let previous = smoothedEtaSecondsValue {
-            smoothedEtaSecondsValue = (previous * 0.75) + (eta * 0.25)
-        } else {
-            smoothedEtaSecondsValue = eta
-        }
-
-        return smoothedEtaSecondsValue
-    }
-
-    func formattedETA(_ etaSeconds: TimeInterval?) -> String {
-        guard let etaSeconds, etaSeconds.isFinite, etaSeconds >= 0 else { return "ETA: --" }
-        let rounded = etaSeconds.rounded()
-        guard rounded < Double(Int.max) else { return "ETA: --" }
-        let total = Int(rounded)
-        let hours = total / 3600
-        let mins = (total % 3600) / 60
-        let secs = total % 60
-        if hours > 0 {
-            return "ETA: \(hours)h " + String(format: "%02dm", mins)
-        }
-        return String(format: "ETA: %02d:%02d", mins, secs)
-    }
-
-    func formattedDistance(_ meters: Double?) -> String {
-        guard let meters, meters.isFinite, meters >= 0 else { return "Distance: --" }
-        if meters >= 1000 {
-            return String(format: "Distance: %.2f km", meters / 1000)
-        }
-        return String(format: "Distance: %.0f m", meters)
     }
 
     private func save() {

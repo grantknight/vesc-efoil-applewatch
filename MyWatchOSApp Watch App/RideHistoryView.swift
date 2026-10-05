@@ -47,6 +47,8 @@ private struct RideDetailView: View {
     @ObservedObject var logger: SessionLogger
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
+    @AppStorage("GPS_SPEEDUNIT") private var speedUnitRaw = GPSSpeedUnit.kph.rawValue
+    private var speedUnit: GPSSpeedUnit { GPSSpeedUnit(rawValue: speedUnitRaw) ?? .kph }
     var body: some View {
         List {
             Text(ride.startedAt, format: .dateTime.month(.abbreviated).day().hour().minute()).font(.caption)
@@ -54,7 +56,7 @@ private struct RideDetailView: View {
             row("Duration", rideDuration(ride.duration))
             row("GPS distance", String(format: "%.2f km", ride.distanceMeters / 1000))
             row("Energy used", String(format: "%.1f Wh", ride.energyWh))
-            row("Peak GPS speed", String(format: "%.1f kph", ride.maxSpeedMs * 3.6))
+            row("Peak GPS speed", String(format: "%.1f ", formatVescSpeed(ride.maxSpeedMs, unit: speedUnit)) + speedUnit.displayLabel)
             row("Peak power", String(format: "%.0f W", ride.maxWatts))
             row("Average power", String(format: "%.0f W", ride.averageWatts))
             row("Peak controller", String(format: "%.0f °C", ride.maxControllerTemperatureC))

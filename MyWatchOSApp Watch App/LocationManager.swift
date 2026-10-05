@@ -16,6 +16,14 @@ enum GPSSpeedUnit: String, CaseIterable, Identifiable {
     var displayLabel: String {
         switch self { case .kph: return "km/h"; case .ms: return "m/s"; default: return rawValue }
     }
+    var spokenLabel: String {
+        switch self {
+        case .kph: return "kilometres per hour"
+        case .mph: return "miles per hour"
+        case .ms: return "metres per second"
+        case .knots: return "knots"
+        }
+    }
 }
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -203,9 +211,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
               newHeading.headingAccuracy >= 0, isRecent(newHeading.timestamp) else { return }
         DispatchQueue.main.async {
             guard self.isEnabled(), self.isTracking else { return }
+            // After a heading gap, start from the new reading instead of easing the arrow
+            // through a direction that is no longer current.
+            let continuous = self.lastHeadingAt.map { newHeading.timestamp.timeIntervalSince($0) <= 3 } ?? false
             self.headingDegrees = resolved
             self.lastHeadingAt = newHeading.timestamp
-            if let previous = self.smoothedHeadingDegrees {
+            if continuous, let previous = self.smoothedHeadingDegrees {
                 let delta = self.shortestAngleDelta(from: previous, to: resolved)
                 self.smoothedHeadingDegrees = self.normalizeAngle(previous + (delta * self.headingSmoothingAlpha))
             } else {
