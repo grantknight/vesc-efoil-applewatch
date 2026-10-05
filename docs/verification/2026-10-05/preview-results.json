@@ -1,0 +1,35 @@
+{
+  "source_sha256": "4635bb607a6df58addddb293a9fe221e2e9b94dfce32aaae26758a7523faf782",
+  "executed_at": "2026-10-05T06:25:24.679Z",
+  "browser": {
+    "name": "chromium",
+    "version": "141.0.7390.37",
+    "channel": null,
+    "executable": "/opt/pw-browsers/chromium",
+    "package": "/tmp/claude-0/-home-user-vesc-efoil-applewatch/2ce33127-f1f8-5b7f-8532-4da274f8e56e/scratchpad/pw/node_modules/playwright"
+  },
+  "results": [
+    {
+      "pass": 1,
+      "width": 1280,
+      "assertions": 100,
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "pass": 2,
+      "width": 736,
+      "assertions": 100,
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "pass": 3,
+      "width": 320,
+      "assertions": 100,
+      "errors": [],
+      "result": "PASS"
+    }
+  ],
+  "status": "PASS"
+}

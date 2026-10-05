@@ -6,7 +6,7 @@ A standalone SwiftUI watchOS app for read-only VESC telemetry over Bluetooth LE.
 
 **AI/developer entry point:** read [MASTER_PROMPT.md](MASTER_PROMPT.md) for the complete product brief, accepted Sport design, architecture, gotchas and remaining work. [AGENTS.md](AGENTS.md) directs coding agents there. The [verification record](docs/VERIFICATION.md) retains dated test/review receipts and all 18 native screenshots.
 
-The application at `97d32aa` passed three clean Mac builds/test/launch runs, 300 browser assertions, independent review and three Jev evidence assessments. Live vendor-specific BMS cell decoding still needs the battery/BMS identity; physical Watch installation and on-water hardware acceptance remain unfinished. The handover documentation was updated on 5 October 2026 without changing application behavior.
+The application at `97d32aa` passed three clean Mac builds/test/launch runs, 300 browser assertions, independent review and three Jev evidence assessments. Live vendor-specific BMS cell decoding still needs the battery/BMS identity; physical Watch installation and on-water hardware acceptance remain unfinished. The handover documentation was updated on 5 October 2026 without changing application behavior. Later on 5 October, branch `claude/nifty-bohr-hou2sb` (application commit `c75abfc`) added reviewed fixes and Sport-layout refinements that passed three-seed Mac CI and the browser suite but have no Jev decisions and no visually reviewed native screenshots yet; see the [verification record](docs/VERIFICATION.md).
 
 ## Features
 
