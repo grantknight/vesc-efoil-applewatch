@@ -4,13 +4,20 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 const require = createRequire(import.meta.url);
-const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'C:/Users/Grant Knight/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+// PLAYWRIGHT_PACKAGE selects a Playwright install outside this repository;
+// PLAYWRIGHT_CHANNEL (for example msedge) or PLAYWRIGHT_EXECUTABLE selects the
+// browser. Defaults run Playwright's own Chromium, so the suite is portable
+// beyond the original Windows environment that supplied bundled Edge paths.
+const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const source = readFileSync('preview/watch-preview.html');
 const server = createServer((req, res) => { res.writeHead(200, {'Content-Type': 'text/html'}); res.end(source); });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}`;
 mkdirSync('verification/preview', { recursive: true });
-const browser = await chromium.launch({ headless: true, channel: 'msedge' });
+const launchOptions = { headless: true };
+if (process.env.PLAYWRIGHT_CHANNEL) launchOptions.channel = process.env.PLAYWRIGHT_CHANNEL;
+if (process.env.PLAYWRIGHT_EXECUTABLE) launchOptions.executablePath = process.env.PLAYWRIGHT_EXECUTABLE;
+const browser = await chromium.launch(launchOptions);
 const results = [];
 try {
   for (const [pass, width] of [[1, 1280], [2, 736], [3, 320]]) {
