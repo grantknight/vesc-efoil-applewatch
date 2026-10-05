@@ -6,7 +6,7 @@ Updated: **5 October 2026**. Owner: **Grant Knight**. Repository: **grantknight/
 
 Continue developing this repository without requiring Grant to repeat the conversation. Read this brief, README, MAC_HANDOFF and WIDGET_SETUP. Inspect the working tree and current GitHub state before editing. This handover puts the implementation and documentation on the default `main` branch; the development history originated in `codex/watch-ready` and PR #3. Do not assume a local preview server, cloud runner, credentials or previous AI agents remain available in a new environment.
 
-The most recently fully verified **application source** is commit `97d32aa134fb9502c9b8b8948c6389d7db390dcc`, dated 4 October 2026. This handover adds documentation/evidence without changing application behavior. See [the verification record](docs/VERIFICATION.md) for exact scope and immutable retained receipts.
+The most recently **Jev-gated** application source is commit `97d32aa134fb9502c9b8b8948c6389d7db390dcc`, dated 4 October 2026 on `main`. On 5 October 2026 branch `claude/nifty-bohr-hou2sb` added reviewed fixes and Sport-layout refinements at application commit `c75abfc601c0e3eecab862273bd3589818f7c0e2`: a publish-time-fresh snapshot speed, a non-destructive connection cancel, restored hero speed dominance with the preview-parity compass dial, removal of dead ETA smoothing, and a portable browser verification suite. That branch passed the 300-assertion browser suite on Linux Chromium, the offline Node suites, and three scoped reviews by AI reviewer contexts that did not author the changes; its three-seed macOS CI dispatches (77 XCTests, Watch+complication builds, six simulator scenes per size) and their exact outcomes are recorded in the verification record. It has **no Jev evidence decisions** (no `OPENROUTER_API_KEY` in that environment) and no physical-Watch checks. See [the verification record](docs/VERIFICATION.md) for exact scope, receipts and limitations before treating it as fully verified.
 
 ## Purpose and intended outcome
 
@@ -20,12 +20,12 @@ The app is **read-only telemetry**. It sends telemetry requests, never throttle/
 
 Grant selected **Sport** from the proposed designs and approved the refined layout. The earlier local design carousel is optional historical material, not a dependency; the native code and tracked preview are the authoritative implementation.
 
-- GPS ground speed and destination compass form two adjacent columns. The arrow belongs beside speed at a comparable visual height, rather than beside tiny text or at the bottom.
+- GPS ground speed and destination compass form two adjacent columns. The arrow belongs beside speed at a comparable visual height, rather than beside tiny text or at the bottom. Speed is the hero reading: it must render visibly larger than the four telemetry tiles on every Watch size, as the approved preview draws it (the pre-October-5 native build inverted this on small Watches).
 - Direction, distance to the selected point, approximate ETA and estimated arrival battery belong with the arrow; they are all destination information.
 - Below that are four equally prominent readings: input power `W`, battery `%`, ESC temperature `°C`, pack voltage `V`. Use large inline values/units, not repetitive visible Power/Battery/ESC/Voltage captions. Preserve accessible spoken meanings.
 - Voltage and ESC temperature are as critical to read in the water as power and battery. Do not shrink them into secondary footnotes.
 - The bottom strip beneath temperature and voltage is permanently visible ESC fault status: fresh no-fault **None**, known/unknown reported error with its code, or **Unavailable** when no valid fresh sample exists. Stale data must never become a live all-clear.
-- Use the same refined compass needle for dashboard/navigation rather than a basic inconsistent arrow.
+- Use the same refined compass needle for dashboard/navigation rather than a basic inconsistent arrow. The dial carries a subtle filled face, a firmer ring and ticks, and a two-facet pointer with a bright hub, matching the preview dial; its height budgets itself so the destination captions can never overflow the hero row onto the tiles.
 - Motor temperature is neither displayed nor polled: the hardware has ESC temperature only. Legacy archive fields remain readable for backwards compatibility, and VESC fault names may legitimately mention motor-related errors.
 - Battery BMS has its own connection control and 12S cell page. C1–C12, voltage units, min/max and spread must remain understandable at small Watch sizes; distinguish sample, fresh, stale and unsupported states.
 
@@ -33,7 +33,7 @@ Grant selected **Sport** from the proposed designs and approved the refined layo
 
 ### VESC connection and measurements
 
-`BluetoothManager.swift` owns the VESC BLE session, saved-device discovery/reconnect, notification readiness, bounded request handling and no-response watchdog. The expected adapter uses Nordic UART service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` and VESC packet framing/CRC. Do not assume every BLE adapter or firmware is compatible without verification.
+`BluetoothManager.swift` owns the VESC BLE session, saved-device discovery/reconnect, notification readiness, bounded request handling and no-response watchdog. The expected adapter uses Nordic UART service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` and VESC packet framing/CRC. Do not assume every BLE adapter or firmware is compatible without verification. Cancelling a pending connection attempt preserves the saved controller identifier and any active ride (logged as a connection gap); only the confirmed Reset pairing action forgets the device, and switching to a different controller still ends the ride first.
 
 `Packet.swift`, `VByteArray.swift`, `VescTelemetryDecoder.swift`, `VescRequestQueue.swift` and `VescStats.swift` handle framing, CRC, strict mask/length/value validation, bounded requests and telemetry. Preserve unfamiliar firmware fault codes instead of treating them as no fault. Live primary telemetry expires after six seconds; field availability/fault state must follow the actual sample rather than connection status alone.
 
@@ -67,7 +67,7 @@ Currently supported reads are **only Bluetooth SIG standard values**: Device Inf
 
 ### Complication
 
-`FoilingComplication/FoilingTelemetryWidget.swift` is an embedded WidgetKit extension using App Group `group.com.grantknight.vescfoil` with `TelemetrySnapshot.swift` and matching entitlements. It shows a cached reading/age, does not start Bluetooth or record rides, and supports rectangular/circular/inline/corner slots. Snapshot expiry is 60 seconds, distinct from live telemetry's six seconds. WidgetKit controls refresh timing. Unknown percentage remains a dash. Follow WIDGET_SETUP for signing and all identifier changes.
+`FoilingComplication/FoilingTelemetryWidget.swift` is an embedded WidgetKit extension using App Group `group.com.grantknight.vescfoil` with `TelemetrySnapshot.swift` and matching entitlements. It shows a cached reading/age, does not start Bluetooth or record rides, and supports rectangular/circular/inline/corner slots. Snapshot expiry is 60 seconds, distinct from live telemetry's six seconds. WidgetKit controls refresh timing. Unknown percentage remains a dash. The snapshot's GPS display speed is resolved at publish time and is nil whenever no fresh fix exists, so a silently stalled GPS can never freeze an old speed under a refreshing timestamp; the complication does not currently render speed. Follow WIDGET_SETUP for signing and all identifier changes.
 
 ### Native and browser demos
 
@@ -79,7 +79,7 @@ Currently supported reads are **only Bluetooth SIG standard values**: Device Inf
 
 Grant asked for a conductor using councils for aesthetics/functionality/reliability and OpenRouter **Jev** for repeated evidence assessment, with at least **three to five clean passes** before continuing. The last implementation has three actual Jev PASS decisions and three independent scoped source reviews; reviewers excluded their own authored files. All eighteen native screenshots received independent visual review. Keep source, executed test, image-review and model-assessment claims distinct.
 
-Use `swift test --parallel` for the portable Foundation package. Seeds `TEST_SEED=101/202/303` each exercise 3,000 deterministic packet-fragmentation cases. The verified application has 77 XCTest cases, including eight BMS outcome tests. `node Tests/jev-gate.test.mjs` verifies the gate offline. Browser checks: `node preview/test_preview.cjs` and `node scripts/preview-test.mjs`; the latter needs Playwright and a compatible browser/runtime (the previous Windows environment supplied bundled Playwright/Edge paths; inspect the script before porting).
+Use `swift test --parallel` for the portable Foundation package. Seeds `TEST_SEED=101/202/303` each exercise 3,000 deterministic packet-fragmentation cases. The verified application has 77 XCTest cases, including eight BMS outcome tests. `node Tests/jev-gate.test.mjs` verifies the gate offline. Browser checks: `node preview/test_preview.cjs` and `node scripts/preview-test.mjs`; the latter needs Playwright (`PLAYWRIGHT_PACKAGE` selects an install outside the repository; `PLAYWRIGHT_CHANNEL` **or** `PLAYWRIGHT_EXECUTABLE` selects the browser, never both; the default is Playwright's own Chromium). Its results file records the browser that actually ran. The Windows-specific bundled Edge path is gone; the suite has executed on Linux Chromium and the original Windows setup remains reachable via those variables.
 
 `.github/workflows/watch-verification.yml` runs three macOS-15 jobs on main/codex pushes. Each records the exact revision, tests core, builds Watch plus complication with signing disabled, then runs `scripts/simulator-smoke.sh`: six scenes on 40/42/46 mm Watch simulators, still-running checks after eight seconds and actual PNGs. Same-repo PR-triggered duplicates are deliberately skipped; successful push jobs are the real verification. Artifacts expire after 14 days, hence selected receipts/screenshots are now retained in Git.
 
