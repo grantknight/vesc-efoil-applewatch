@@ -4,13 +4,23 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 const require = createRequire(import.meta.url);
-const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'C:/Users/Grant Knight/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+// PLAYWRIGHT_PACKAGE selects a Playwright install outside this repository; PLAYWRIGHT_CHANNEL
+// (for example msedge) or PLAYWRIGHT_EXECUTABLE selects the browser. The defaults run
+// Playwright's own Chromium, so the suite is not tied to the original Windows/Edge machine.
+const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const source = readFileSync('preview/watch-preview.html');
 const server = createServer((req, res) => { res.writeHead(200, {'Content-Type': 'text/html'}); res.end(source); });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}`;
 mkdirSync('verification/preview', { recursive: true });
-const browser = await chromium.launch({ headless: true, channel: 'msedge' });
+const launchOptions = { headless: true };
+if (process.env.PLAYWRIGHT_CHANNEL && process.env.PLAYWRIGHT_EXECUTABLE) throw new Error('Set PLAYWRIGHT_CHANNEL or PLAYWRIGHT_EXECUTABLE, not both.');
+if (process.env.PLAYWRIGHT_CHANNEL) launchOptions.channel = process.env.PLAYWRIGHT_CHANNEL;
+if (process.env.PLAYWRIGHT_EXECUTABLE) launchOptions.executablePath = process.env.PLAYWRIGHT_EXECUTABLE;
+const browser = await chromium.launch(launchOptions);
+// Recorded so a PASS names the browser that produced it.
+const browserIdentity = { name: browser.browserType().name(), version: browser.version(),
+  channel: process.env.PLAYWRIGHT_CHANNEL ?? null, executable: process.env.PLAYWRIGHT_EXECUTABLE ?? null };
 const results = [];
 try {
   for (const [pass, width] of [[1, 1280], [2, 736], [3, 320]]) {
@@ -45,6 +55,9 @@ try {
     check(await page.evaluate(() => previewApp.state.recording), true);
     check(await page.evaluate(() => previewApp.state.ride.gaps), 1);
     await page.selectOption('#scenario', 'live');
+    check(await page.evaluate(() => previewApp.state.tab), 'dashboard');
+    check((await page.locator('#screen .watch-status').innerText()).includes('REC'), true);
+    await page.locator('.screen-picker [data-tab=ride]').click();
     await page.locator('[data-action=save]').click();
     await page.locator('#modal-cancel').click();
     check(await page.evaluate(() => previewApp.state.recording), true);
@@ -96,13 +109,13 @@ try {
     check(await page.evaluate(() => previewApp.state.destination.name), 'Downwind finish');
     await page.locator('.screen-picker [data-tab=navigation]').click();
     await page.selectOption('#scenario', 'low');
-    check((await page.locator('#screen').innerText()).includes('below reserve'), true);
+    check((await page.locator('#screen').innerText()).includes('under 20% reserve'), true);
     await page.locator('[data-action=editDestination]').click();
     await page.locator('#latitude').fill('44');
     await page.locator('[data-action=saveDestination]').click();
     check((await page.locator('#screen').innerText()).includes('runs out before arrival'), true);
     await page.selectOption('#scenario', 'unknown');
-    check((await page.locator('#screen').innerText()).includes('Arrival battery —'), true);
+    check((await page.locator('#screen').innerText()).includes('Arrival battery unavailable'), true);
     await page.locator('[data-action=returnLaunch]').click();
     check(await page.evaluate(() => previewApp.state.destination.name), 'Launch / beach');
     check(await page.evaluate(() => previewApp.state.finish.latitude), 44);
@@ -127,7 +140,7 @@ try {
     check((await page.locator('#screen .fault').innerText()).includes('Under voltage'), true);
     await page.selectOption('#scenario', 'stale');
     check(await page.locator('#screen .fault').count(), 0);
-    check(await page.locator('.direction-panel .arrival').innerText(), 'Arrival —');
+    check(await page.locator('.direction-panel .arrival .glance').innerText(), '—');
     await page.selectOption('#scenario', 'live');
     await page.locator('[data-action=editDestination]').click();
     await page.locator('#latitude').fill('43.7075');
@@ -154,7 +167,15 @@ try {
     check((await page.locator('#screen .metric').nth(1).getAttribute('aria-label')).includes('estimated battery percentage'), true);
     check((await page.locator('#screen .metric').nth(2).getAttribute('aria-label')).includes('ESC temperature'), true);
     check((await page.locator('.direction-panel').innerText()).includes('834 m'), true);
-    check((await page.locator('.direction-panel').innerText()).includes('Arrival ~'), true);
+    check(/^~\d+%$/.test(await page.locator('.direction-panel .arrival .glance').innerText()), true);
+    // Hierarchy: GPS speed renders larger than every tile value; destination lines are at least 10px.
+    check(await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('#screen .speed')).fontSize) > Math.max(...[...document.querySelectorAll('#screen .metric .value')].map(el => parseFloat(getComputedStyle(el).fontSize)))), true);
+    check(await page.locator('.destination-lines > span').evaluateAll(elements => elements.length === 3 && elements.every(el => parseFloat(getComputedStyle(el).fontSize) >= 10)), true);
+    check((await page.locator('#screen .metric').nth(3).getAttribute('aria-label')).includes('volts'), true);
+    await page.selectOption('#scenario', 'wrist');
+    check((await page.locator('#screen .watch-status').innerText()).includes('WRIST DOWN'), true);
+    check(await page.locator('.watch-content').evaluate(el => el.scrollHeight <= el.clientHeight), true);
+    await page.selectOption('#scenario', 'live');
     check(await page.locator('.fault-footer .fault-status').count(), 1);
     check(await page.locator('.watch-content').evaluate(el => el.scrollHeight <= el.clientHeight), true);
     await page.screenshot({ path: `verification/preview/preview-${width}.png`, fullPage: true });
@@ -216,7 +237,7 @@ try {
   results.push({ result: 'FAIL', error: error.message, stack: error.stack }); process.exitCode = 1;
 } finally {
   await browser.close(); server.close();
-  const report = { source_sha256: createHash('sha256').update(source).digest('hex'), executed_at: new Date().toISOString(), results, status: results.length===3 && results.every(r=>r.result==='PASS') ? 'PASS' : 'FAIL' };
+  const report = { source_sha256: createHash('sha256').update(source).digest('hex'), executed_at: new Date().toISOString(), browser: browserIdentity, results, status: results.length===3 && results.every(r=>r.result==='PASS') ? 'PASS' : 'FAIL' };
   writeFileSync('verification/preview/results.json', JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 }
