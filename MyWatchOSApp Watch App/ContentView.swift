@@ -74,7 +74,11 @@ private struct ConnectionScreen: View {
                             }
                             if bluetoothManager.state != .off {
                                 Button(bluetoothManager.state == .connecting ? "Cancel connection" : "Scan again") {
-                                    bluetoothManager.restart(withNewDevice: bluetoothManager.state == .connecting)
+                                    if bluetoothManager.state == .connecting {
+                                        bluetoothManager.cancelConnectionAttempt()
+                                    } else {
+                                        bluetoothManager.restart()
+                                    }
                                 }
                             }
                         }

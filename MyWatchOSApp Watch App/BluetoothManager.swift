@@ -125,6 +125,23 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         reconnectAttempt = 0
         if centralManager.state == .poweredOn { startScanning() } else { state = .off }
     }
+    /// Stops a pending connection attempt without forgetting the saved controller
+    /// or ending an active ride. No automatic retry runs until the user scans again.
+    func cancelConnectionAttempt() {
+        guard centralManager != nil else { return }
+        connectTimer?.invalidate()
+        connectTimer = nil
+        reconnectTimer?.invalidate()
+        reconnectTimer = nil
+        reconnectAttempt = 0
+        let old = vesc
+        vesc = nil
+        if let old { centralManager.cancelPeripheralConnection(old) }
+        clearConnection()
+        guard centralManager.state == .poweredOn else { state = .off; return }
+        state = .scanningIdle
+        connectionMessage = "Connection cancelled"
+    }
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard centralManager === central else { return }
         guard central.state == .poweredOn else {
