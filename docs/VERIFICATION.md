@@ -1,5 +1,19 @@
 # Verification record
 
+## Battle testing and interface completion, 5 October 2026 (same branch, PR #4)
+
+Application source: `3707a2c` (base `8fdfac3`). Changes: 13 seeded stress tests; distance text rounding; wrist-down background running through a water-sports workout session while a ride records (HealthKit entitlement, workout-processing and location background modes); Health permission in Settings; BMS reconnect with backoff; compass readings worse than 45° ignored; map pin cannot be saved from the zoomed-out no-fix view; small complication slots show a symbol and a dash; confirmation before saving from the connection screen; `--demo-wrist` simulator scene.
+
+What actually ran:
+
+- **macOS CI**: runs on `4397b0c` (stress tests + workout session) and `273a09a` (BMS reconnect, compass, map, complication) succeeded on all three jobs, including `swift test --parallel` with the stress tests under seeds 101/202/303, the Watch + complication build and the seven-scene simulator launch. Final application head `3707a2c`: CI_BATTLE_RESULT. Job logs and screenshots cannot be downloaded from this environment, so per-test counts were not read from logs; the suite is 99 XCTest cases by source count.
+- **Browser preview**: `node preview/test_preview.cjs` PASS (adds the ride page background note); `scripts/preview-test.mjs` PASS, 107 assertions × 3 widths, zero JavaScript errors, source SHA-256 `132b0269bb3b84452077391924ca400514659f30bc7577b3bf7a0c6b918a610c` ([preview-results.json](verification/2026-10-05/preview-results.json)). 12S battery page renders in [preview-bms](verification/2026-10-05/preview-bms/).
+- **Independent review**: first pass CHANGES REQUESTED (no blockers), fixes re-reviewed APPROVE WITH NITS; see [independent-review-2.md](verification/2026-10-05/independent-review-2.md).
+
+What the stress tests established (portable core only): malformed or out-of-range VESC replies are rejected and valid ones round-trip exactly; a corrupted frame never desynchronises its neighbours; the parser recovers from noise after the link goes quiet; over an hour of the app's 2 s polling with 1% of BLE notifications lost, every decoded value is exactly what was sent and a loss never spills into the next poll; ride storage stays consistent through random operations, injected write failures and restarts; the arrival estimate never predicts from a flat or rising battery and is exact for a linear decline. These are simulations of the protocol and storage code, not Bluetooth or water tests.
+
+Not done: native screenshot inspection (artifacts not downloadable here; publishing them to a branch from CI was refused by this environment's permission policy), Jev (no `OPENROUTER_API_KEY`), and all hardware checks. Wrist-down logging, the Health prompt, background GPS and BMS reconnect are unverified on a Watch.
+
 ## Review and UI refinement, 5 October 2026 (branch `codex/review-and-ui-refinement`)
 
 Application source: `58352ba5fab0b5edba3c320d21915efaaf6b2f52` (base `main` `8c43c20`). Changes: Sport dashboard hierarchy and destination block, compass dial, wrist-down (Always-On) state, arrival-battery summary levels, cancel-connection and Change VESC fixes, 12S default voltage estimate, snapshot speed at publish time, ride-save clock clamp, heading smoothing reset, history speed unit, BMS label size, spoken units. Full review: `2026-10-05-code-review.md` in the project files.
