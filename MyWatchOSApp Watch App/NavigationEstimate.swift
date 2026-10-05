@@ -165,9 +165,12 @@ struct ArrivalBatteryEstimator {
 enum NavigationFormat {
     static func distance(_ meters: Double?) -> String {
         guard let meters, meters.isFinite, meters >= 0 else { return "—" }
-        if meters >= 10_000 { return String(format: "%.1f km", meters / 1000) }
-        if meters >= 1000 { return String(format: "%.2f km", meters / 1000) }
-        return String(format: "%.0f m", meters)
+        // Tiers follow the rounded value, so 999.6 m reads "1.00 km" (not "1000 m") and
+        // 9,996 m reads "10.0 km" (not "10.00 km").
+        if meters >= 9_995 { return String(format: "%.1f km", meters / 1000) }
+        let wholeMeters = meters.rounded()
+        if wholeMeters >= 1000 { return String(format: "%.2f km", meters / 1000) }
+        return String(format: "%.0f m", wholeMeters)
     }
 
     /// Minutes and seconds under an hour ("3:05"), hours and minutes above ("1h 05m").
