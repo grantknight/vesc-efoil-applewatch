@@ -32,8 +32,25 @@ struct FoilingTelemetryWidgetView: View {
     var body: some View {
         Group {
             if !entry.isFresh {
-                Label("Open VESC · data stale", systemImage: "antenna.radiowaves.left.and.right.slash")
-                    .font(.caption2)
+                // Small slots get a symbol and a dash rather than unreadable sentence text.
+                switch family {
+                case .accessoryCircular:
+                    VStack(spacing: 0) {
+                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                        Text("—").font(.headline)
+                    }
+                    .accessibilityLabel("VESC data stale. Open Foil Assist.")
+                    .widgetLabel { Text("VESC data stale") }
+                case .accessoryCorner:
+                    Image(systemName: "antenna.radiowaves.left.and.right.slash").font(.headline)
+                        .accessibilityLabel("VESC data stale. Open Foil Assist.")
+                        .widgetLabel { Text("VESC data stale") }
+                case .accessoryInline:
+                    Text("VESC data stale")
+                default:
+                    Label("Open VESC · data stale", systemImage: "antenna.radiowaves.left.and.right.slash")
+                        .font(.caption2)
+                }
             } else {
                 switch family {
                 case .accessoryInline:
@@ -51,7 +68,10 @@ struct FoilingTelemetryWidgetView: View {
                             } currentValueLabel: { Text(battery).font(.caption2) }
                             .gaugeStyle(.accessoryCircular)
                         } else {
-                            Text("Battery % unavailable").font(.system(size: 9)).multilineTextAlignment(.center)
+                            VStack(spacing: 0) {
+                                Image(systemName: "battery.0")
+                                Text("—").font(.headline)
+                            }.accessibilityLabel("Battery percent unavailable")
                         }
                     }
                     .widgetLabel { Text(hasFault ? "Last: \(fault)" : "Last VESC reading") }

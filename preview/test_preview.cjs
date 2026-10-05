@@ -50,6 +50,8 @@ first.app.tick();
 assert.equal(first.app.state.ride.km, km);
 assert.equal(first.app.state.ride.wh, wh);
 assert.equal(first.app.state.ride.gaps, 1);
+first.app.setTab('ride');
+assert.match(first.get('screen').innerHTML, /Keeps logging with your wrist down/, 'ride page states background running');
 first.app.action('save');
 assert.equal(first.get('modal').hidden, false);
 first.get('modal-cancel').click();

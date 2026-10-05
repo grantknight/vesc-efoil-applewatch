@@ -517,8 +517,14 @@ private struct MapPointPickerView: View {
         self.pointKind = pointKind
         self.pointName = pointName
         let existing = pointKind == .launch ? destinationManager.launchCoordinate : destinationManager.finishCoordinate
-        let center = existing ?? currentCoordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
-        _region = State(initialValue: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)))
+        let other = pointKind == .launch ? destinationManager.finishCoordinate : destinationManager.launchCoordinate
+        // Without a fix or a saved point there is no honest local centre, so start zoomed out
+        // and require zooming in before a pin can be saved (never a silent 0,0 pin).
+        if let center = existing ?? currentCoordinate ?? other {
+            _region = State(initialValue: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)))
+        } else {
+            _region = State(initialValue: MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 20, longitude: 0), span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 120)))
+        }
     }
 
     private var pins: [MapPointPin] {
@@ -535,15 +541,23 @@ private struct MapPointPickerView: View {
                 MapMarker(coordinate: point.coordinate, tint: point.id == "launch" ? .orange : .mint)
             }
             .overlay { Image(systemName: "plus").foregroundStyle(.white).padding(5).background(.black.opacity(0.5), in: Circle()).allowsHitTesting(false) }
-            Text(String(format: "%.5f, %.5f", region.center.latitude, region.center.longitude)).font(.caption2).monospacedDigit()
+            if zoomedInEnough {
+                Text(String(format: "%.5f, %.5f", region.center.latitude, region.center.longitude)).font(.caption2).monospacedDigit()
+            } else {
+                Text("No GPS fix. Zoom in on your spot.").font(.caption2).foregroundStyle(.orange)
+            }
             Button("Save \(pointKind.title) here") {
-                guard region.center.latitude.isFinite, region.center.longitude.isFinite, CLLocationCoordinate2DIsValid(region.center) else { return }
+                guard zoomedInEnough, region.center.latitude.isFinite, region.center.longitude.isFinite, CLLocationCoordinate2DIsValid(region.center) else { return }
                 if pointKind == .launch { destinationManager.saveLaunchPoint(region.center, name: pointName.isEmpty ? "Launch / beach" : pointName) }
                 else { destinationManager.setDestination(region.center, name: pointName.isEmpty ? "Finish" : pointName) }
                 dismiss()
-            }.font(.caption).tint(.mint).accessibilityIdentifier("save-map-center")
+            }.font(.caption).tint(.mint).disabled(!zoomedInEnough).accessibilityIdentifier("save-map-center")
         }.navigationTitle("Place a pin")
     }
+
+    /// Roughly 20 km tall or closer. Normal use opens at about 3 km, so this only blocks
+    /// saving from the zoomed-out view shown when there is no fix or saved point.
+    private var zoomedInEnough: Bool { region.span.latitudeDelta <= 0.2 }
 }
 
 struct SettingsView: View {

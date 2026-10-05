@@ -212,8 +212,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard isEnabled(), isTracking else { return }
         let trueHeading = newHeading.trueHeading
         let resolved = trueHeading
+        // A compass disturbed by the motor or battery reports poor accuracy; ignoring it lets
+        // the arrow fall back to GPS course instead of pointing confidently the wrong way.
         guard resolved.isFinite, (0..<360).contains(resolved), newHeading.headingAccuracy.isFinite,
-              newHeading.headingAccuracy >= 0, isRecent(newHeading.timestamp) else { return }
+              newHeading.headingAccuracy >= 0, newHeading.headingAccuracy <= 45,
+              isRecent(newHeading.timestamp) else { return }
         DispatchQueue.main.async {
             guard self.isEnabled(), self.isTracking else { return }
             // After a heading gap, start from the new reading instead of easing the arrow
