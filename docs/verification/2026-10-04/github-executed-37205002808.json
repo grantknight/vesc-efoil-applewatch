@@ -1,0 +1,137 @@
+{
+  "run_id": 37205002808,
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "conclusion": "success",
+  "url": "https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37205002808",
+  "jobs": [
+    {
+      "name": "Clean pass 101",
+      "conclusion": "success",
+      "url": "https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37205002808/job/111444244446",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record toolchain and revision",
+          "conclusion": "success"
+        },
+        {
+          "name": "Protocol and persistence tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Watch and complication simulator build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Watch simulator launch and screenshot",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload exact-run evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Clean pass 202",
+      "conclusion": "success",
+      "url": "https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37205002808/job/111444244585",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record toolchain and revision",
+          "conclusion": "success"
+        },
+        {
+          "name": "Protocol and persistence tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Watch and complication simulator build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Watch simulator launch and screenshot",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload exact-run evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "Clean pass 303",
+      "conclusion": "success",
+      "url": "https://github.com/grantknight/vesc-efoil-applewatch/actions/runs/37205002808/job/111444244615",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record toolchain and revision",
+          "conclusion": "success"
+        },
+        {
+          "name": "Protocol and persistence tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Watch and complication simulator build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Watch simulator launch and screenshot",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload exact-run evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}

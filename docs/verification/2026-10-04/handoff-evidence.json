@@ -1,0 +1,232 @@
+{
+  "milestone": "Mac development handoff: native Watch app and complication, persistent ride history, visible ESC faults, independent read-only BMS link and 12-cell screen with honest unavailable fallback; vendor cell decoding and hardware acceptance excluded",
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "github_run_id": 37205002808,
+  "assembled_at": "2026-10-04T13:27:01.273536+00:00",
+  "preview_report_path": "verification/preview/results.json",
+  "executed_results": {
+    "swift_core_tests": {
+      "result": "PASS",
+      "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+      "summary": "77 XCTest cases passed on each of three clean Mac runners; 3,000 differently seeded packet fragmentation cases per runner. Covers protocol/fault validation, persistence/recovery/write failures, navigation geometry, measured battery trends/reserve/exhaustion/staleness, unknown battery/GPS, bounded queries, complete 12-cell validation including critical low cells, freshness, and strict standard BLE values.",
+      "artifacts": [
+        {
+          "path": "verification/github-executed-37205002808.json",
+          "sha256": "a58ef49989c7e540165d8d1e5b83b4cae01500a9ae8ce6cbb9a101854ee97a57"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/swift-tests.txt",
+          "sha256": "d571813ddfbf21ddaeb0c437ba1e90ef85772141208e5bd7c3d89fc44cf846db"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/swift-tests.txt",
+          "sha256": "7544e7d43d74f07585122c74f4db906e18d9a0198122ea887672f2a15d245ed3"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/swift-tests.txt",
+          "sha256": "15860b7c7d4b5f3c30add2853c8717e2b9e50d675806265d255e7e780c5c4986"
+        }
+      ],
+      "clean_runs": 3,
+      "test_cases_per_run": 77,
+      "fragmentation_cases_total": 9000,
+      "seeds": [
+        101,
+        202,
+        303
+      ]
+    },
+    "watch_simulator_build": {
+      "result": "PASS",
+      "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+      "summary": "Watch app and embedded WidgetKit complication compiled successfully with signing disabled on all three clean Mac runners using the shared FoilingVESC scheme.",
+      "artifacts": [
+        {
+          "path": "verification/github-executed-37205002808.json",
+          "sha256": "a58ef49989c7e540165d8d1e5b83b4cae01500a9ae8ce6cbb9a101854ee97a57"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-build.txt",
+          "sha256": "ee74830e07b7d658b62e2bb7f7f94c58fff40b2b44c08f334b32b99bc8a6a00b"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/toolchain.txt",
+          "sha256": "46fcbdccea175fe6f225bc26d386acddbc98c7b9efbae6df20e7089a2b6583c2"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-build.txt",
+          "sha256": "6cf4db4651375ae891764732d8ce0a435f8f6dd61557f15b9268b5f60170c329"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/toolchain.txt",
+          "sha256": "46fcbdccea175fe6f225bc26d386acddbc98c7b9efbae6df20e7089a2b6583c2"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-build.txt",
+          "sha256": "f26782f0ae182f204f7846f80e5baf8bd9af0f393295dfa58bbfc7288fd9cbac"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/toolchain.txt",
+          "sha256": "46fcbdccea175fe6f225bc26d386acddbc98c7b9efbae6df20e7089a2b6583c2"
+        }
+      ],
+      "clean_runs": 3
+    },
+    "watch_simulator_launch": {
+      "result": "PASS",
+      "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+      "summary": "All three runs installed and launched the exact built Watch app in six demo scenes, confirmed the process was still running after eight seconds, and captured native screenshots. Final visual review confirms ESC-only Sport readings, GPS arrow, fault banner, destination setup and reserve warning with clear demo labels and no clipping, with all 12 cells visible in both sample and unavailable BMS scenes.",
+      "artifacts": [
+        {
+          "path": "verification/github-executed-37205002808.json",
+          "sha256": "a58ef49989c7e540165d8d1e5b83b4cae01500a9ae8ce6cbb9a101854ee97a57"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/simulator-launch.txt",
+          "sha256": "d4cef1b7669c8bc1df9e2484e78e31e8968d3bc5c9752129d54d54041887c6dd"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo.png",
+          "sha256": "be8a3433bc76e8f2cca0d76c233dc7c411edc6e5cbd1cb6797468b30a548bdfe"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-navigation.png",
+          "sha256": "ba5cfeadd77ddcad72d652bf6a366c46620e279104ed335d424669261345e878"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-fault.png",
+          "sha256": "9d8fc10977d5a5f1023f8c210180da80516c5727ec9318a0a1fa7886095c5cb1"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-destination.png",
+          "sha256": "ff0973a93fe2d473e4442b3e99f2f2d057a4724fe404e7ed84950c64066d633f"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-bms.png",
+          "sha256": "6e91077f08bb3e97b2c612e16da73f6bf8ae73a2e60a58bfa27ba3901fc465e0"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-101/watch-demo-bms-unavailable.png",
+          "sha256": "1d3ca3707b994fa1decc490e14218f8778465d0fac305a50b1f39cfb4a13bafa"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/simulator-launch.txt",
+          "sha256": "6fb6f0333d40e5224b4d4460468ba421caba0faf7c325a6833a9ac60f832d978"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo.png",
+          "sha256": "ea7c15c3ad3400e8ad88034fd065ff6c8efd2d9e7094c404bfddc46c95c38e9e"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-navigation.png",
+          "sha256": "791c838948a4354d34519de22e09a32a13ac72d55f0af565bee1cf349f8bae85"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-fault.png",
+          "sha256": "b75c3131476fd6425a1c1e91ed512cd64a3cc3f6a1a7bd2cab428b94547cbc06"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-destination.png",
+          "sha256": "8990f8b46d27ab9fc0032ca63666f74210355f27f3b45633612bd6e5b7861363"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-bms.png",
+          "sha256": "d8184747f37be5dbfaea4ceb7226bf325031dfbdd9c55698cd89b33a52c6b3da"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-202/watch-demo-bms-unavailable.png",
+          "sha256": "0e0a18795020335d31a9fe86e6342458dbd81819951d92d70cc3e157412e940a"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/simulator-launch.txt",
+          "sha256": "8cf9adf5760a50f2621d1ed19279cebb35ee532b02e7cfdc831542094ce0c2f2"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo.png",
+          "sha256": "25d278241af5aa83fa414877b507528a2f74f970aa0e47b1f131c89eb4f1f307"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-navigation.png",
+          "sha256": "36d6025208124f1f62263fe7216a0c7df7f642552ed940c247e77cc4fcd43fbc"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-fault.png",
+          "sha256": "30cde0f3c9c5b4ff092ff39b1391c568f000ea30a167f2827c0255faf4ae13ad"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-destination.png",
+          "sha256": "e51baedc82c80796f33f0b084284a12e1d24bf362e5100ef65b9503f59b01bef"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-bms.png",
+          "sha256": "241ac6d14f6ff521000ee635f7f8e6405c34e761d029225e0820b8724ff4b8b7"
+        },
+        {
+          "path": "verification/mac-ready-37205002808/watch-verification-303/watch-demo-bms-unavailable.png",
+          "sha256": "c3d76a8d3cf51c2070b7a8912a109e67f554f1a50a6da0d85e7fccbaf9551812"
+        },
+        {
+          "path": "verification/native-visual-review.json",
+          "sha256": "2d65808ae2e0efdf961715fdc83f3e60639cf7f692008cc17afac0aa8ea87478"
+        }
+      ],
+      "clean_runs": 3,
+      "watch_sizes_mm": [
+        40,
+        42,
+        46
+      ],
+      "hardware_test": false
+    },
+    "preview_browser_tests": {
+      "result": "PASS",
+      "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+      "summary": "Three isolated real Edge browser contexts at widths 1280, 736 and 320 each passed 100 assertions with zero JavaScript errors: coordinate validation, map dragging, independently saved launch/finish and switching, reserve/exhaustion/unknown predictions, fault freshness, ride start/save/cancel, disconnect accounting, history persistence/reload/deletion, GPS units, complication preview, equal enlarged unit-only metric typography, compass availability/orientation and narrow-screen overflow, all 12 BMS cells, explicit sample isolation, unknown/stale cell suppression and BMS action independence from VESC and ride state.",
+      "artifacts": [
+        {
+          "path": "verification/preview/results.json",
+          "sha256": "c0eb6a49ee65da3ea92e41665165b7e01a83364f28e237013cc83c5a775c2774"
+        },
+        {
+          "path": "preview/watch-preview.html",
+          "sha256": "4635bb607a6df58addddb293a9fe221e2e9b94dfce32aaae26758a7523faf782"
+        }
+      ],
+      "clean_runs": 3,
+      "assertions_total": 300
+    },
+    "independent_review": {
+      "result": "PASS",
+      "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+      "summary": "Three councils approved the exact frozen revision in cross-reviewed scopes. Each report explicitly excludes its reviewer-authored files and hardware acceptance. Integration/reliability councils independently reviewed native UI and browser behavior; design council independently reviewed BMS manager/model and outcome tests. The author of native BMS UI did not approve its final screenshots. Source, runtime and screenshot evidence are separate.",
+      "artifacts": [
+        {
+          "path": "verification/council-ride.json",
+          "sha256": "de931200ea71d435a45e910f5891daf0a4e55d4cbb8144b0149a72a45d841606"
+        },
+        {
+          "path": "verification/council-design.json",
+          "sha256": "edaa633af834632dc2816ecfdf1e2bb5a6d77a4dc4562990fe9e20689561a7a1"
+        },
+        {
+          "path": "verification/council-integration.json",
+          "sha256": "977f8df07bb1ee4704ce39fd5d172d868c366b118666e7f3bac461201c856077"
+        },
+        {
+          "path": "verification/native-visual-review.json",
+          "sha256": "2d65808ae2e0efdf961715fdc83f3e60639cf7f692008cc17afac0aa8ea87478"
+        }
+      ],
+      "author_is_reviewer": false,
+      "councils": 3
+    }
+  },
+  "open_defects": [],
+  "excluded_acceptance": {
+    "real_watch_installation_and_signing": "Pending user Mac, development team and paired Watch; excluded from this development handoff milestone.",
+    "actual_vesc_ble_and_sensor_agreement": "Unverified without user controller/adapter; required hardware acceptance in MAC_HANDOFF.md.",
+    "water_lock_background_runtime_gps_endurance_and_on_water_use": "Unverified hardware measurements; continuous suspended logging is not promised.",
+    "live_bms_cell_protocol_and_dual_ble_hardware": "Pending BMS brand/model/firmware or current phone app. Only standard read-only identity/battery BLE values are supported; a link never fabricates cell voltages. Actual 12-cell vendor decoding and simultaneous physical VESC/BMS connections remain unverified.",
+    "app_store_publication": "Not performed or included."
+  }
+}

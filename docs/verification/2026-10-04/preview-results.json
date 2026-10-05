@@ -1,0 +1,28 @@
+{
+  "source_sha256": "4635bb607a6df58addddb293a9fe221e2e9b94dfce32aaae26758a7523faf782",
+  "executed_at": "2026-10-04T13:04:46.603Z",
+  "results": [
+    {
+      "pass": 1,
+      "width": 1280,
+      "assertions": 100,
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "pass": 2,
+      "width": 736,
+      "assertions": 100,
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "pass": 3,
+      "width": 320,
+      "assertions": 100,
+      "errors": [],
+      "result": "PASS"
+    }
+  ],
+  "status": "PASS"
+}

@@ -2,7 +2,7 @@
 
 ## Open and preview
 
-1. Download this branch or clone the repository and check out `codex/watch-ready`.
+1. Clone or download the repository's current `main` branch. Read `MASTER_PROMPT.md` for intent and unfinished work; `codex/watch-ready` contains the development history from PR #3.
 2. Install Xcode with a watchOS SDK supporting watchOS 10.6 or newer. Open `MyWatchOSApp.xcodeproj`.
 3. Choose scheme **FoilingVESC** and a Watch simulator. Build and run. The app's **Preview** button opens clearly labelled synthetic screens without a VESC connection. Preview never records synthetic values in your ride history.
 4. The browser preview is `preview/watch-preview.html`. It demonstrates the layout and controls with simulated values; it is separate from the native SwiftUI app.

@@ -1,0 +1,68 @@
+{
+  "milestone": "Mac development handoff: native Watch app and complication, persistent ride history, visible ESC faults, independent read-only BMS link and 12-cell screen with honest unavailable fallback; vendor cell decoding and hardware acceptance excluded",
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "preflight": "PASS",
+  "missing": [],
+  "failed": [],
+  "requested_model": "typesafe/jev-1.13",
+  "expected_served_model": "typesafe/jev-1.13-20260917",
+  "hardware_release": false,
+  "rubric_sha256": "af07fe1d633cfc180dafabeb94eeaa7176d5ac19bd5f07575c7f029459230131",
+  "evidence_sha256": "26de1fcd8735351d692c016d67745c4e709dfd54c15dfb00c12b2e033d2352d5",
+  "decisions": [
+    {
+      "pass": 1,
+      "request_id": "gen-dec-1791120440-iawra0SLJff7SG4Po5u5",
+      "served_model": "typesafe/jev-1.13-20260917",
+      "choice": "PASS",
+      "confidence": 0.95,
+      "probabilities": {
+        "HOLD": 0.02,
+        "INSUFFICIENT_EVIDENCE": 0.02,
+        "PASS": 0.96
+      },
+      "usage": {
+        "input_tokens": 5734,
+        "output_tokens": 45,
+        "cost": 0.000240828
+      }
+    },
+    {
+      "pass": 2,
+      "request_id": "gen-dec-1791120441-Ijj1OGAJGQ7QHjtJz7v6",
+      "served_model": "typesafe/jev-1.13-20260917",
+      "choice": "PASS",
+      "confidence": 0.92,
+      "probabilities": {
+        "INSUFFICIENT_EVIDENCE": 0.02,
+        "HOLD": 0.04,
+        "PASS": 0.94
+      },
+      "usage": {
+        "input_tokens": 5734,
+        "output_tokens": 45,
+        "cost": 0.000240828
+      }
+    },
+    {
+      "pass": 3,
+      "request_id": "gen-dec-1791120441-MTQFilUB9m0eXtvPbBUN",
+      "served_model": "typesafe/jev-1.13-20260917",
+      "choice": "PASS",
+      "confidence": 0.94,
+      "probabilities": {
+        "HOLD": 0.02,
+        "INSUFFICIENT_EVIDENCE": 0.02,
+        "PASS": 0.96
+      },
+      "usage": {
+        "input_tokens": 5734,
+        "output_tokens": 45,
+        "cost": 0.000240828
+      }
+    }
+  ],
+  "status": "PASS",
+  "cost_usd": 0.000722484,
+  "authentic_artifacts_verified": true
+}

@@ -1,0 +1,75 @@
+{
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "reviewer": "ride_persistence reliability council",
+  "result": "PASS",
+  "review_type": "Independent scoped source review plus inspection of parent-executed browser evidence; source PASS excludes pending native runtime/visual acceptance",
+  "milestone": "Mac development handoff with independent BMS discovery and unknown-cell UI",
+  "tracked_working_tree": "CLEAN",
+  "reviewed_files": [
+    "MyWatchOSApp Watch App/BMSManager.swift",
+    "MyWatchOSApp Watch App/BMSCellSnapshot.swift",
+    "Tests/VESCCoreTests/BMSCellSnapshotTests.swift",
+    "MyWatchOSApp Watch App/BMSViews.swift",
+    "MyWatchOSApp Watch App/BluetoothManager.swift",
+    "MyWatchOSApp Watch App/BatteryConfig.swift",
+    "MyWatchOSApp Watch App/ContentView.swift",
+    "MyWatchOSApp Watch App/DashboardView.swift",
+    "preview/watch-preview.html",
+    "scripts/preview-test.mjs",
+    "scripts/simulator-smoke.sh",
+    "Package.swift",
+    "README.md",
+    "MAC_HANDOFF.md"
+  ],
+  "retained_unchanged_peer_scope": {
+    "base_revision": "9f384589ef5883c5cd919a3d641dcf9d49333648",
+    "method": "Git tree diff identifies current BMS/UI/config/docs/test changes; unchanged peer telemetry decoder, fault mapping, queue, stats, snapshots, widget, location, destination and project sources retain previously completed independent source review.",
+    "own_core": "Own persistence, Packet, navigation helper and history changes remain excluded."
+  },
+  "checks": [
+    "BMS uses its own CBCentralManager and selected peripheral. It never mutates VESC manager, session logger, navigation state or widget snapshot. App wiring excludes the current/saved VESC UUID and updates exclusion when controller selection changes.",
+    "BMS scan waits at most12 seconds for Bluetooth and scans at most12 seconds, retaining at most64 discovered devices. Connection timeout is15 seconds, inspection10 seconds and serialized standard read8 seconds. Disconnect clears data, operations/timers and retires central identity.",
+    "BMS callbacks check current central/peripheral/characteristic/service identities and active inspection state. Old-manager events, late discovery after deadline and unsolicited value callbacks cannot mutate a new linked session.",
+    "Unknown services are inspected by UUID only. Values are read only from standard Device Information180A manufacturer/model2A29/2A24 and Battery180F percentage2A19 with read permission. Three standard UUIDs are deduplicated; reads serialize, battery polling is5 seconds and availability expires at10 seconds. No writes, vendor commands or notification subscriptions occur.",
+    "Live cellSnapshot remains nil because no compatible vendor cell decoder is implemented. Standard Battery percentage is strictly one bounded0...100 byte and is shown separately; it cannot become cell voltages, VESC percentage or arrival prediction.",
+    "Cell model requires exact declared count, bounded1...50 count, finite0...6 values and finite measurement time. Complete sets preserve order and numeric min/max/spread. Genuine reported0/0.1V cells remain critical measurements; future identified driver must reject its own unavailable sentinels before model construction.",
+    "Eight model tests specify golden numeric summary/order, missing/extra cells, invalid/nonfinite/out-of-range values, critical low cells, declared counts, future/stale/invalid clocks, strict standard percentage and bounded readable UTF8. This source review does not claim native test execution.",
+    "Native12-cell grid first accepts only a fresh complete12-cell snapshot. Mismatched counts, stale data and unidentified protocol render twelve unknown placeholders without indexing invalid arrays or fabricating balance statistics.",
+    "BMS demo has separate immutable synthetic values, no manager/radio and no persisted readings. Parent app disables both radio clients in demo. Browser BMS state is transient and explicitly simulated; reload removes its samples/selections.",
+    "New installations default12S while explicit saved configuration remains retained. Documents distinguish connection/discovery from actual BMS protocol compatibility and require battery/BMS identity plus later vendor implementation.",
+    "Browser tests verify C1-C12, unknown placeholders/summary, separate simulated BMS linking, golden3.88V minimum/40mV spread, stale hiding, VESC ride independence, reload clearing samples and visible lastcell. Existing fault, destination, units, storage, SVG and overflow checks remain.",
+    "Current browser320-width populated/unknown BMS screenshots show all twelve cells and numeric or unknown summary with top connection control. Current dashboard/fault screenshots retain equal large metrics, destination information and bottom fault row.",
+    "Six-scene simulator script adds populated and unknown BMS fixtures to existing demo/navigation/fault/destination scenes across requested40/42/46mm devices. It checks process presence and captures each image; source inspection is not evidence of final execution."
+  ],
+  "corrected_findings": [
+    "Early grid could index twelve positions in a valid shorter declared-count model. Fixed by optional fresh count12 snapshot gating; alternate counts now render explicit unavailable state.",
+    "Earlier browser SVG reuse retained a35-degree wrapper rotation. Fixed and regression-covered before prior frozen revision; source remains corrected.",
+    "Earlier demo battery finding withdrawn after reading full updateStats implementation, which delegates to explicit demo source."
+  ],
+  "open_defects": [],
+  "executed_browser_evidence": {
+    "executor": "parent; council inspected report and screenshots without rerunning it",
+    "report": "verification/preview/results.json",
+    "status": "PASS",
+    "widths": [1280, 736, 320],
+    "assertions_per_context": 100,
+    "page_errors": 0,
+    "source_sha256": "4635bb607a6df58addddb293a9fe221e2e9b94dfce32aaae26758a7523faf782",
+    "source_hash_matches_frozen_html": true,
+    "screenshots_inspected": [
+      "verification/preview/bms-sample-320.png",
+      "verification/preview/bms-unavailable-320.png",
+      "verification/preview/watch-320.png",
+      "verification/preview/fault-320.png"
+    ]
+  },
+  "scope_exclusions": [
+    "Own RideStore/RideModels/SessionLogger, Packet, NavigationEstimate and related tests/history changes are excluded from independent approval; parent/integration review separately.",
+    "No claim final-revision native tests, builds, six-scene launches or eighteen-size/scene screenshot checks have passed; current macOS evidence pending separate review.",
+    "Live vendor-specific BMS cell protocol is unsupported and excluded until battery/BMS hardware identity and compatible decoder are available.",
+    "Physical Watch installation/signing, simultaneous hardware BLE links, BMS correctness, background logging, outdoor GPS, Water Lock, range and on-water acceptance remain unverified.",
+    "Older graphics report binds an earlier revision and is not current native visual evidence."
+  ],
+  "native_visual_acceptance": "PENDING_FINAL_REVISION_EVIDENCE",
+  "hardware_acceptance": "EXCLUDED_AND_UNVERIFIED"
+}

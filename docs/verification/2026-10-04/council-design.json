@@ -1,0 +1,62 @@
+{
+  "reviewer": "watch_design",
+  "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+  "decision": "APPROVE_FOR_MAC_DEVELOPMENT_HANDOFF",
+  "scope": "Independent peer source review of fault decoding, polling/freshness, measured arrival estimator, persistence, separate read-only BMS connection/model and outcome tests authored by other council members. Browser test/render evidence was inspected. Native runtime and hardware acceptance are pending and excluded. Live vendor-specific BMS cell decoding requires the battery/BMS identity and is explicitly outside completed acceptance.",
+  "reviewed_files": [
+    "MyWatchOSApp Watch App/RideModels.swift",
+    "MyWatchOSApp Watch App/RideStore.swift",
+    "MyWatchOSApp Watch App/SessionLogger.swift",
+    "Tests/VESCCoreTests/RideStoreTests.swift",
+    "MyWatchOSApp Watch App/VescTelemetryDecoder.swift",
+    "MyWatchOSApp Watch App/VescRequestQueue.swift",
+    "MyWatchOSApp Watch App/TelemetrySnapshot.swift",
+    "MyWatchOSApp Watch App/VescStats.swift",
+    "MyWatchOSApp Watch App/BluetoothManager.swift",
+    "MyWatchOSApp Watch App/NavigationEstimate.swift",
+    "Tests/VESCCoreTests/ProtocolTests.swift",
+    "Tests/VESCCoreTests/VescRequestQueueTests.swift",
+    "Tests/VESCCoreTests/TelemetrySnapshotTests.swift",
+    "Tests/VESCCoreTests/NavigationEstimateTests.swift",
+    "MyWatchOSApp Watch App/BMSCellSnapshot.swift",
+    "MyWatchOSApp Watch App/BMSManager.swift",
+    "Tests/VESCCoreTests/BMSCellSnapshotTests.swift",
+    "MyWatchOSApp Watch App/BatteryConfig.swift"
+  ],
+  "independence": "Reviewer did not author the reviewed core fault, estimator, radio, BMS or persistence implementation/tests. Reviewer-authored ContentView.swift, DashboardView.swift, BMSViews.swift, DestinationManager.swift, LocationManager.swift, ride-duration helper, and initial browser scaffolding are excluded from independent source approval. Browser screenshots/test report were inspected as outcome evidence only.",
+  "findings": [
+    "Each persisted mutation commits its atomic checkpoint before publishing updated ride state. Failed writes preserve the last committed active ride, and start/save retries remain possible.",
+    "Interrupted recordings recover into history at the last persisted update and do not silently resume. Invalid or unknown archives are preserved and rejected before recovery writes begin.",
+    "Distance requires contiguous valid GPS observations; missing GPS and connection or stale gaps are not extrapolated. Consumption uses positive battery input power, with trapezoidal integration and a time-weighted observed average.",
+    "Retained sample detail is bounded while lifetime summaries and counts survive. Saved history is newest-first and deletion is explicit.",
+    "Persisted and public mutation dates are constrained to the supported epoch range. Archive completion time must equal updated time, and retained samples must be strictly ordered and lie within session bounds.",
+    "Duplicate timestamps after reconnect cannot create an archive that later fails chronology validation. Invalid disconnect dates still discard the integration baseline, preventing gap integration.",
+    "The 25 reviewed outcome tests cover restart, interruption, integration, missing GPS, regeneration, bounds, duplicate and backward time, invalid samples, failed writes, corrupt and unknown archives, deletion, temperature extrema, unknown battery percentage and the five new archive/date regressions. This statement describes test source review and does not claim execution.",
+    "Validated primary selective telemetry requests ESC temperature and one-byte bit15 fault status, without a motor-temperature sensor request. Only complete validated primary samples refresh live telemetry; fault-only/legacy absent fields cannot revive old readings.",
+    "Fault codes retain their numeric identity, including unknown firmware additions. Freshness gating distinguishes a current no-fault code0 from unknown, unavailable and stale status. Golden byte-width, truncation, completeness and cache-expiration tests inspect those outcomes.",
+    "The Foundation navigation helper validates coordinates and finite GPS speed, returns unavailable bearings for coincident/antipodal ambiguity, and uses great-circle straight-line geometry. It never uses inferred propeller speed.",
+    "The arrival estimator requires continuous recent percentage observations, sufficient net depletion, progress toward the target and a stable regression. Missing/stale inputs, source changes, gaps, future/backward time and insufficient trends invalidate estimates. Projection accounts for sample age, preserves negative exhaustion and reports reserve shortfall instead of hiding it.",
+    "The 14 navigation outcome tests inspect known depletion predictions, elapsed sample age, exhaustion/reserve, bad times/inputs, insufficient/noisy data, source/gap resets, bounded evidence, coordinate parsing, cardinal/dateline/antipodal geometry and GPS-only ETA. This is independent test-source review, not a claim of native execution.",
+    "Previously approved fault, estimator, persistence and existing tests are unchanged from 9f384589ef5883c5cd919a3d641dcf9d49333648 through this freeze, confirmed by scoped git diff exiting 0. The controller manager adds only a selected/saved peripheral UUID getter for BMS exclusion. BatteryConfig changes only the unset-series-count default from 14 to the requested 12, preserving stored selections; explicit battery setup is still required before a voltage estimate is enabled.",
+    "The BMS has its own lazy central, device selection and timers. It excludes the current or saved VESC, bounds scan/service/characteristic diagnostics and timeouts, and retires old callback sessions on disconnect/demo. Real cellSnapshot remains nil until an identified driver exists; it never turns pack voltage or standard percentage into fabricated individual cells.",
+    "Only Bluetooth SIG standard manufacturer/model text and battery percentage values are read, through serialized reads with per-read timeouts and current peripheral/characteristic guards. Unknown characteristic values are not read and no vendor write or notification command is guessed. Demo mode retires radio state; repeated same-mode calls preserve diagnostics.",
+    "The pure BMS snapshot validates declared cell count, finite timestamp and all bounded finite cell voltages. The final bound is 0 through 6 V, retaining reported zero/very low cells as critical measurements and rejecting negative/nonfinite input. A future identified driver must interpret its own unavailable wire sentinels before model construction. Freshness rejects future/stale/invalid clocks without altering sample time.",
+    "Eight new BMS outcome tests inspect complete ordered 12-cell sets and summaries, wrong/missing count, invalid values, critical zero/0.1 V, bounded declared counts, freshness, one-byte standard percentage and bounded readable device identity. The earlier in-progress lower-bound source/test mismatch is resolved in the frozen model. This is independent test-source review; expected total 77 native/core tests and macOS execution are pending, not claimed as run here.",
+    "Browser evidence at verification/preview/results.json reports 100 assertions in each of 1280, 736, 320 pixel contexts, with zero browser errors. Its HTML SHA256 was independently matched to the current preview file. Actual 320px healthy/fault screenshots retain the equal-size inline-unit readings and show a prominent bordered ESC fault row. Sample and unavailable BMS screenshots show all 12 cell groups in a readable 3x4 grid, explicit sample/unavailable states and separate BMS connection controls."
+  ],
+  "open_defects": [],
+  "visual_evidence": {
+    "path": "verification/preview/watch-320.png",
+    "additional_paths": ["verification/preview/fault-320.png", "verification/preview/bms-sample-320.png", "verification/preview/bms-unavailable-320.png"],
+    "revision": "97d32aa134fb9502c9b8b8948c6389d7db390dcc",
+    "html_sha256": "4635bb607a6df58addddb293a9fe221e2e9b94dfce32aaae26758a7523faf782",
+    "assessment": "Current browser dashboard, fault and BMS views are readable and contained at 320px. The ESC faults footer is clearly separate from readings; BMS sample and unavailable screens expose all 12 labeled groups and BMS entry controls. This is browser outcome inspection only; no native visual PASS is claimed for this freeze. Final 40/42/46mm native screenshots, map gestures, both radio connections and hardware readiness remain pending."
+  },
+  "excluded_acceptance": [
+    "Final-revision macOS CI execution and native dashboard/navigation/fault/destination-editor screenshots",
+    "Apple signing, deployment and physical Watch installation",
+    "Actual VESC/Bluetooth compatibility and reconnection behavior on hardware",
+    "Live BMS vendor-specific cell decoder, requiring BMS maker/model/protocol identity; actual second-link compatibility and simultaneous radio behavior on hardware",
+    "Background runtime, Watch battery endurance, GPS/compass accuracy and on-water riding validation"
+  ]
+}
