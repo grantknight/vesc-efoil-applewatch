@@ -358,7 +358,7 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         var snapshot = TelemetrySnapshot()
         let display = displaySpeedProvider?()
         snapshot.speed = display?.speed
-        snapshot.speedUnit = (display?.unit ?? .mph).rawValue
+        snapshot.speedUnit = (display?.unit ?? .kph).rawValue
         snapshot.watts = vescRtStats.instantWatts
         snapshot.batteryPercent = vescRtStats.batteryPercentIsAvailable ? vescRtStats.batteryPercent : nil
         snapshot.batteryVoltage = vescRtStats.batteryVoltage

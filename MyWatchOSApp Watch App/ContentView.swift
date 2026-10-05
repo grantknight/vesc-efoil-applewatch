@@ -93,7 +93,7 @@ private struct ConnectionScreen: View {
                                 Button("Retry storage") { logger.retryLoad() }
                             }
                             if logger.isRecording {
-                                Text("Ride recording · reconnecting").foregroundStyle(.orange).font(.caption)
+                                Text(bluetoothManager.state == .connecting ? "Ride recording · reconnecting" : "Ride recording · VESC not connected").foregroundStyle(.orange).font(.caption)
                                 Button("Save ride") { logger.endRide() }
                             }
                             Button("Ride history") { showHistory = true }
@@ -173,7 +173,7 @@ struct Home: View {
                     rtStats: rtStats, displaySpeed: displaySpeed, speedUnit: speedUnit,
                     speedAvailable: locationManager.hasFreshSpeed,
                     connectionMessage: bluetoothManager.connectionMessage,
-                    isRecording: logger.isRecording, now: Date(),
+                    isRecording: logger.isRecording, now: timeline.date,
                     directionAngle: destinationManager.arrowAngle(current: freshCoordinate, heading: locationManager.directionHeading),
                     directionReference: locationManager.directionReference,
                     hasDestination: destinationManager.destination != nil,
@@ -250,12 +250,16 @@ struct Home: View {
                     Button("Settings") { sheet = .settings }
                     Button(bluetoothManager.state == .connected ? "Change VESC" : "Connect VESC") {
                         // A live link is only dropped after confirmation.
-                        if bluetoothManager.telemetryIsFresh { confirmChangeVESC = true } else { showConnection() }
+                        if bluetoothManager.state == .connected { confirmChangeVESC = true } else { showConnection() }
                     }
-                    .alert("Disconnect the live VESC?", isPresented: $confirmChangeVESC) {
-                        Button("Disconnect", role: .destructive, action: showConnection)
+                    .alert("Change the connected VESC?", isPresented: $confirmChangeVESC) {
+                        Button("Change", role: .destructive) {
+                            // Forget the saved controller so it cannot auto-reconnect before another is chosen.
+                            bluetoothManager.restart(withNewDevice: true)
+                            showConnection()
+                        }
                         Button("Keep connected", role: .cancel) {}
-                    } message: { Text("Telemetry stops while you choose a controller. An active ride records a gap.") }
+                    } message: { Text("Telemetry stops and an active ride is saved. Then choose a controller from the list.") }
                     Button("Connect battery BMS") {
                         bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
                         sheet = .bms

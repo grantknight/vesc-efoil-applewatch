@@ -34,9 +34,11 @@ struct DashboardView: View {
     }
     private var faultText: String {
         if let code = activeFault { return "ESC faults: \(code) · \(VescFaultCode.label(for: code))" }
+        // A wrist-down frame can be a minute old, so it never shows a green all-clear.
+        if wristDown { return "ESC faults: raise wrist to check" }
         return faultAvailable ? "ESC faults: None" : "ESC faults: Unavailable"
     }
-    private var faultColor: Color { activeFault != nil ? SportPalette.fault : (faultAvailable ? sportColor : SportPalette.caution) }
+    private var faultColor: Color { activeFault != nil ? SportPalette.fault : (faultAvailable && !wristDown ? sportColor : SportPalette.caution) }
     private var arrivalColor: Color {
         switch arrival.level {
         case .exhaustedBeforeArrival: return SportPalette.fault
@@ -52,13 +54,13 @@ struct DashboardView: View {
             // the four tiles; the dial sits beside its three destination lines so neither the
             // arrow nor the text has to shrink to fit under the other on a 40 mm Watch.
             let gap: CGFloat = 3
-            let statusHeight: CGFloat = 11
+            let statusHeight: CGFloat = 12
             let faultHeight: CGFloat = 24
             let available = max(0, geometry.size.height - statusHeight - faultHeight - gap * 3)
             let heroHeight = available * 0.46
             let tileHeight = available * 0.27
             let valueSize = min(32, max(17, tileHeight * 0.80))
-            let speedSize = min(44, max(valueSize + 4, heroHeight - 15))
+            let speedSize = min(44, max(valueSize + 2, heroHeight - 17))
             let columnWidth = max(0, (geometry.size.width - 10 - 6) / 2)
             let dialSize = max(14, min(heroHeight, columnWidth * 0.48))
             let captionSize = min(13, heroHeight / 3.6, max(9.5, heroHeight * 0.25))
@@ -75,7 +77,7 @@ struct DashboardView: View {
                     VStack(spacing: 1) {
                         Text(speedAvailable ? String(format: "%.1f", displaySpeed) : "—")
                             .font(.system(size: speedSize, weight: .bold, design: .rounded))
-                            .foregroundStyle(sportColor).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                            .foregroundStyle(wristDown ? SportPalette.secondaryText : sportColor).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                             .frame(height: speedSize + 2)
                         Text(speedAvailable ? "GPS \(speedUnit.displayLabel)" : "GPS unavailable")
                             .font(.system(size: 10, weight: .semibold)).foregroundStyle(SportPalette.secondaryText)
@@ -89,8 +91,8 @@ struct DashboardView: View {
                                 .frame(width: dialSize, height: dialSize)
                             VStack(alignment: .leading, spacing: 0) {
                                 if hasDestination {
-                                    Text(navigationDistance).foregroundStyle(sportColor)
-                                    Text(destinationETA).foregroundStyle(SportPalette.primaryText)
+                                    Text(navigationDistance).foregroundStyle(wristDown ? SportPalette.secondaryText : sportColor)
+                                    Text(destinationETA).foregroundStyle(wristDown ? SportPalette.secondaryText : SportPalette.primaryText)
                                     (Text(Image(systemName: "flag.checkered")).font(.system(size: captionSize * 0.8))
                                         + Text(" " + arrival.glance))
                                         .foregroundStyle(arrivalColor)
@@ -99,7 +101,7 @@ struct DashboardView: View {
                                     Text("point").foregroundStyle(sportColor)
                                 }
                             }.font(.system(size: captionSize, weight: .semibold, design: .rounded)).monospacedDigit()
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .lineLimit(1).minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }.frame(maxWidth: .infinity, maxHeight: .infinity)
                             .contentShape(Rectangle())

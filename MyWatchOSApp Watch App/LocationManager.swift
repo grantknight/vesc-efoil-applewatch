@@ -213,7 +213,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             guard self.isEnabled(), self.isTracking else { return }
             // After a heading gap, start from the new reading instead of easing the arrow
             // through a direction that is no longer current.
-            let continuous = self.lastHeadingAt.map { newHeading.timestamp.timeIntervalSince($0) <= 3 } ?? false
+            let continuous = self.lastHeadingAt.map { newHeading.timestamp.timeIntervalSince($0) <= 10 } ?? false
             self.headingDegrees = resolved
             self.lastHeadingAt = newHeading.timestamp
             if continuous, let previous = self.smoothedHeadingDegrees {
