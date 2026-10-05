@@ -43,13 +43,23 @@ struct DashboardView: View {
             let heroHeight = available * 0.45
             let tileHeight = available * 0.275
             let valueSize = min(30, max(17, tileHeight * 0.80))
-            let speedSize = min(38, max(12, min(heroHeight * 0.58, heroHeight - 22)))
+            // Speed is the hero reading: stay visibly larger than the four tiles at
+            // every Watch size while leaving room for the GPS unit caption below it.
+            let speedSize = min(40, max(17, min(heroHeight - 13, max(heroHeight * 0.62, valueSize + 5))))
+            // Destination captions grow to 8pt only where the hero row can hold
+            // them; the smallest Watch keeps the screenshot-verified 7pt budget.
+            let captionSize: CGFloat = heroHeight >= 46 ? 8 : 7
+            // The dial budgets its own height so a larger speed cannot push the
+            // destination distance, ETA and arrival lines out of the hero row.
+            let needleSize = max(20, min(speedSize + 2, heroHeight - (captionSize * 2 + 6)))
             VStack(spacing: gap) {
                 HStack {
                     Text("● \(status)").foregroundStyle(fresh ? sportColor : .orange)
                     Spacer()
                     if isRecording { Text("● REC").foregroundStyle(.red) }
                 }.font(.system(size: 8, weight: .bold)).frame(height: statusHeight)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Telemetry \(status.lowercased())\(isRecording ? ". Recording ride" : "")")
                 HStack(spacing: 5) {
                     VStack(spacing: 1) {
                         Text(speedAvailable ? String(format: "%.1f", displaySpeed) : "—")
@@ -65,12 +75,12 @@ struct DashboardView: View {
                     Button(action: onDestinationTap) {
                         VStack(spacing: 1) {
                             DestinationCompassNeedle(angle: directionAngle, color: sportColor)
-                                .frame(width: speedSize + 2, height: speedSize + 2)
+                                .frame(width: needleSize, height: needleSize)
                             Text(navigationDistance + " · " + destinationETA)
-                                .foregroundStyle(sportColor).font(.system(size: 7, weight: .semibold))
+                                .foregroundStyle(sportColor).font(.system(size: captionSize, weight: .semibold))
                             Text(arrivalBatterySummary)
-                                .foregroundStyle(reserveWarning ? Color.orange : Color.secondary)
-                                .font(.system(size: 7, weight: reserveWarning ? .bold : .medium))
+                                .foregroundStyle(reserveWarning ? Color.orange : Color(white: 0.78))
+                                .font(.system(size: captionSize, weight: reserveWarning ? .bold : .medium))
                         }.lineLimit(1).minimumScaleFactor(0.7)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }.buttonStyle(.plain).accessibilityIdentifier("destination-arrow")
@@ -108,21 +118,25 @@ struct DashboardView: View {
 }
 
 /// A true direction is drawn only when the caller has a fresh heading/course and bearing.
-/// The neutral ring remains tappable when direction is unavailable.
+/// The neutral face remains tappable when direction is unavailable. The filled face,
+/// firmer ring/ticks and two-facet pointer mirror the approved Sport preview dial so
+/// the arrow stays findable at a glance in bright outdoor light.
 struct DestinationCompassNeedle: View {
     let angle: Double?
     let color: Color
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.16), lineWidth: 0.7)
-            DashboardCompassTicks().stroke(Color.white.opacity(0.32), lineWidth: 0.7)
+            Circle().fill(color.opacity(0.10))
+            Circle().stroke(color.opacity(0.38), lineWidth: 0.8)
+            DashboardCompassTicks().stroke(Color.white.opacity(0.5), lineWidth: 0.8)
             if let angle, angle.isFinite {
                 ZStack {
-                    DashboardNeedleHalf(pointsNorth: false).fill(Color.white.opacity(0.44))
-                    DashboardNeedleHalf(pointsNorth: true).fill(color)
+                    DashboardNeedleHalf(pointsNorth: false).fill(color.opacity(0.35))
+                    DashboardNeedleFacet(leading: true).fill(color)
+                    DashboardNeedleFacet(leading: false).fill(Color.white.opacity(0.88))
                 }.rotationEffect(.degrees(angle))
-                Circle().fill(color).frame(width: 3, height: 3)
+                Circle().fill(Color.white.opacity(0.95)).frame(width: 3, height: 3)
                     .overlay(Circle().stroke(Color.black, lineWidth: 0.7))
             } else {
                 Text("—").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
@@ -141,6 +155,24 @@ private struct DashboardNeedleHalf: Shape {
         path.move(to: CGPoint(x: rect.midX, y: tipY))
         path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.12, y: baseY))
         path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.12, y: baseY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// One side of the forward pointer, split along its axis so the two facets can
+/// carry different brightness like the preview needle.
+private struct DashboardNeedleFacet: Shape {
+    let leading: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let tipY = rect.minY + rect.height * 0.08
+        let baseY = rect.midY + rect.height * 0.04
+        let baseX = leading ? rect.midX - rect.width * 0.12 : rect.midX + rect.width * 0.12
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: tipY))
+        path.addLine(to: CGPoint(x: baseX, y: baseY))
+        path.addLine(to: CGPoint(x: rect.midX, y: baseY))
         path.closeSubpath()
         return path
     }
