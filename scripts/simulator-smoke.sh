@@ -17,7 +17,7 @@ xcrun simctl boot "$watch_id"
 xcrun simctl bootstatus "$watch_id" -b
 app='DerivedData/Build/Products/Debug-watchsimulator/MyWatchOSApp Watch App.app'
 xcrun simctl install "$watch_id" "$app"
-for scene in demo demo-navigation demo-fault demo-destination demo-bms demo-bms-unavailable; do
+for scene in demo demo-navigation demo-fault demo-destination demo-bms demo-bms-unavailable demo-wrist; do
   printf 'Scene: %s\n' "$scene" >> verification-output/simulator-launch.txt
   xcrun simctl launch "$watch_id" com.grantknight.vescfoil.watchkitapp "--$scene" | tee -a verification-output/simulator-launch.txt
   sleep 8

@@ -90,6 +90,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.headingFilter = 3
+        // GPS keeps running with the wrist down while a ride's workout session is active.
+        // Setting this without the declared background mode would crash, so check first.
+        if (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true {
+            locationManager.allowsBackgroundLocationUpdates = true
+        }
         locationManager.requestWhenInUseAuthorization()
 
         if isEnabled() {

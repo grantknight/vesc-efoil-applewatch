@@ -9,6 +9,11 @@ import SwiftUI
 
 @main
 struct MyWatchOSApp_Watch_AppApp: App {
+    init() {
+        // Background running follows real ride recording only; demo data never records.
+        RideWorkoutSession.shared.follow(SessionLogger.shared)
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

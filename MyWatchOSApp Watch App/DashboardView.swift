@@ -16,6 +16,8 @@ struct DashboardView: View {
     var navigationDistance = "—"
     var destinationETA = "—"
     var arrival = ArrivalBatterySummary(prediction: nil, reservePercent: 20)
+    /// Lets the labelled demo show the wrist-down treatment; live data uses the environment only.
+    var previewWristDown = false
     var onDestinationTap: () -> Void = {}
 
     /// Always-On (wrist down) throttles redraws to about once a minute, so a frame must not
@@ -23,13 +25,13 @@ struct DashboardView: View {
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     private let sportColor = SportPalette.accent
     private var fresh: Bool { usesSampleData ? rtStats.isConnected : rtStats.isFresh(now: now) }
-    private var wristDown: Bool { isLuminanceReduced && !usesSampleData }
+    private var wristDown: Bool { (isLuminanceReduced && !usesSampleData) || (usesSampleData && previewWristDown) }
     private var batteryAvailable: Bool { usesSampleData ? rtStats.batteryPercentSource == .demo : rtStats.batteryPercentIsAvailable }
     private var faultAvailable: Bool { fresh && (usesSampleData ? rtStats.faultCode != nil : rtStats.faultIsAvailable(now: now)) }
     private var activeFault: UInt8? { faultAvailable ? rtStats.faultCode.flatMap { $0 == 0 ? nil : $0 } : nil }
     private var status: String {
-        if usesSampleData { return fresh ? "SAMPLE" : "SAMPLE GAP" }
         if wristDown { return "WRIST DOWN" }
+        if usesSampleData { return fresh ? "SAMPLE" : "SAMPLE GAP" }
         return fresh ? "LIVE" : (rtStats.isConnected ? "STALE DATA" : "RECONNECTING")
     }
     private var faultText: String {
@@ -299,6 +301,7 @@ struct DemoWatchView: View {
                               navigationDistance: NavigationFormat.distance(sampleDistance),
                               destinationETA: NavigationFormat.duration(sampleETA),
                               arrival: sampleArrival,
+                              previewWristDown: ProcessInfo.processInfo.arguments.contains("--demo-wrist"),
                               onDestinationTap: { showDestination = true }).tag(0)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 7) {

@@ -4,5 +4,9 @@
 <key>NSBluetoothAlwaysUsageDescription</key><string>Connect directly to your VESC to display ride telemetry.</string>
 <key>NSLocationWhenInUseUsageDescription</key><string>Use GPS for water speed and ride distance.</string>
 <key>WKWatchOnly</key><true/>
+<key>NSHealthShareUsageDescription</key><string>Foil Assist runs a water sports workout only to keep ride logging active with your wrist down. It does not read your health data.</string>
+<key>NSHealthUpdateUsageDescription</key><string>Foil Assist runs a water sports workout only to keep ride logging active with your wrist down. It does not save workouts or health data.</string>
+<key>WKBackgroundModes</key><array><string>workout-processing</string></array>
+<key>UIBackgroundModes</key><array><string>location</string></array>
 <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>vescfoil</string></array></dict></array>
 </dict></plist>

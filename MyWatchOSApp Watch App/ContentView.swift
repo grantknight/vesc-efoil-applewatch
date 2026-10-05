@@ -3,7 +3,7 @@ import MapKit
 import CoreLocation
 
 private var requestsDemo: Bool {
-    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination", "--demo-bms", "--demo-bms-unavailable"].contains($0) }
+    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination", "--demo-bms", "--demo-bms-unavailable", "--demo-wrist"].contains($0) }
 }
 
 private enum HomeSheet: String, Identifiable {
@@ -57,6 +57,7 @@ private struct ConnectionScreen: View {
     @Binding var showDemo: Bool
     @Binding var showHistory: Bool
     @State private var showBMS = false
+    @State private var confirmSave = false
 
     var body: some View {
         NavigationStack {
@@ -94,7 +95,7 @@ private struct ConnectionScreen: View {
                             }
                             if logger.isRecording {
                                 Text(bluetoothManager.state == .connecting ? "Ride recording · reconnecting" : "Ride recording · VESC not connected").foregroundStyle(.orange).font(.caption)
-                                Button("Save ride") { logger.endRide() }
+                                Button("Save ride") { confirmSave = true }
                             }
                             Button("Ride history") { showHistory = true }
                             Button("Preview app") { showDemo = true }
@@ -105,6 +106,10 @@ private struct ConnectionScreen: View {
                 }.sheet(isPresented: $showBMS) {
                     BMSConnectionView(manager: bmsManager, excludedVESC: bluetoothManager.selectedPeripheralID)
                 }
+                .alert("Save this ride?", isPresented: $confirmSave) {
+                    Button("Save ride") { logger.endRide() }
+                    Button("Keep recording", role: .cancel) {}
+                } message: { Text("Finish recording and keep this ride in history. Keep recording to continue this ride when the VESC reconnects.") }
     }
 
     private var connectionTitle: String {
@@ -130,6 +135,7 @@ struct Home: View {
     @ObservedObject var bmsManager: BMSManager
     @ObservedObject private var rtStats: VESCRtStats
     @ObservedObject private var logger = SessionLogger.shared
+    @ObservedObject private var workout = RideWorkoutSession.shared
     @Binding var showDemo: Bool
     let showConnection: () -> Void
     @State private var tabSelected = 0
@@ -215,6 +221,10 @@ struct Home: View {
                             detail("Energy used", String(format: "%.1f Wh", ride.energyWh))
                             detail("Peak power", String(format: "%.0f W", ride.maxWatts))
                             Button("Save ride") { confirmSave = true }.tint(.cyan)
+                            if !workout.status.rideNote.isEmpty {
+                                Text(workout.status.rideNote).font(.caption2)
+                                    .foregroundStyle(workout.status == .running ? Color.secondary : Color.orange)
+                            }
                             Text("Recording pauses telemetry during connection gaps.").font(.caption2).foregroundStyle(.secondary)
                         } else {
                             Text("Ready when you are.").font(.caption).foregroundStyle(.secondary)
