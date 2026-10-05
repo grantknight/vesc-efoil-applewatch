@@ -159,3 +159,77 @@ struct ArrivalBatteryEstimator {
         return rate.isFinite && rSquared.isFinite ? (rate, last.date.timeIntervalSince(first.date), rSquared) : nil
     }
 }
+
+/// Compact, glanceable navigation strings shared by the dashboard and navigation page.
+/// Unavailable inputs always produce a dash, never a reassuring zero.
+enum NavigationFormat {
+    static func distance(_ meters: Double?) -> String {
+        guard let meters, meters.isFinite, meters >= 0 else { return "—" }
+        // Tiers follow the rounded value, so 999.6 m reads "1.00 km" (not "1000 m") and
+        // 9,996 m reads "10.0 km" (not "10.00 km").
+        // Round explicitly (half away from zero) so the preview's Math.round gives identical text.
+        if meters >= 9_995 { return String(format: "%.1f km", (meters / 100).rounded() / 10) }
+        let wholeMeters = meters.rounded()
+        if wholeMeters >= 1000 { return String(format: "%.2f km", (meters / 10).rounded() / 100) }
+        return String(format: "%.0f m", wholeMeters)
+    }
+
+    /// Minutes and seconds under an hour ("3:05"), hours and minutes above ("1h 05m").
+    static func duration(_ seconds: TimeInterval?) -> String {
+        guard let seconds, seconds.isFinite, seconds >= 0 else { return "—" }
+        let rounded = seconds.rounded()
+        guard rounded < 360_000 else { return "—" } // 100 hours: no meaningful foil ETA
+        let total = Int(rounded)
+        if total >= 3600 { return "\(total / 3600)h " + String(format: "%02dm", total % 3600 / 60) }
+        return "\(total / 60):" + String(format: "%02d", total % 60)
+    }
+}
+
+/// How the projected arrival battery relates to the user's reserve.
+enum ArrivalBatteryLevel: Equatable {
+    case unavailable, aboveReserve, belowReserve, exhaustedBeforeArrival
+}
+
+/// One interpretation of a prediction for every surface, so the dashboard, navigation page,
+/// browser preview and spoken labels cannot disagree. Percentages round down and shortfalls
+/// round up, so the display never looks better than the estimate.
+struct ArrivalBatterySummary: Equatable {
+    let level: ArrivalBatteryLevel
+    /// Dashboard value beside the arrival flag: "~64%", "~2%", "Empty" or "—".
+    let glance: String
+    /// Navigation page sentence.
+    let detail: String
+    /// VoiceOver sentence with spoken units.
+    let spoken: String
+
+    init(prediction: ArrivalBatteryPrediction?, reservePercent: Double) {
+        let reserve = reservePercent.isFinite ? Int(min(100, max(0, reservePercent)).rounded()) : 0
+        guard let prediction, prediction.arrivalPercent.isFinite else {
+            level = .unavailable
+            glance = "—"
+            detail = "Arrival battery unavailable"
+            spoken = "Arrival battery estimate unavailable"
+            return
+        }
+        if prediction.willExhaustBeforeArrival || prediction.arrivalPercent < 0 {
+            level = .exhaustedBeforeArrival
+            glance = "Empty"
+            detail = "Battery runs out before arrival"
+            spoken = "Battery projected to run out before arrival"
+            return
+        }
+        let arrival = Int(floor(min(100, prediction.arrivalPercent)))
+        if prediction.reserveShortfallPercent > 0 {
+            let shortfall = Int(ceil(prediction.reserveShortfallPercent))
+            level = .belowReserve
+            glance = "~\(arrival)%"
+            detail = "Arrival ~\(arrival)% · \(shortfall)% under \(reserve)% reserve"
+            spoken = "Estimated battery at arrival about \(arrival) percent, \(shortfall) percent below the \(reserve) percent reserve"
+        } else {
+            level = .aboveReserve
+            glance = "~\(arrival)%"
+            detail = "Arrival ~\(arrival)% · reserve \(reserve)%"
+            spoken = "Estimated battery at arrival about \(arrival) percent, above the \(reserve) percent reserve"
+        }
+    }
+}

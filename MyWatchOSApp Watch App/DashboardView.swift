@@ -12,145 +12,239 @@ struct DashboardView: View {
     var usesSampleData = false
     var directionAngle: Double? = nil
     var directionReference = "Direction unavailable"
-    var navigationDistance = "Destination —"
-    var destinationETA = "ETA —"
-    var arrivalBatterySummary = "Arrival battery —"
-    var reserveWarning = false
+    var hasDestination = true
+    var navigationDistance = "—"
+    var destinationETA = "—"
+    var arrival = ArrivalBatterySummary(prediction: nil, reservePercent: 20)
+    /// Lets the labelled demo show the wrist-down treatment; live data uses the environment only.
+    var previewWristDown = false
     var onDestinationTap: () -> Void = {}
 
-    private let sportColor = Color(red: 0.48, green: 0.96, blue: 0.69)
+    /// Always-On (wrist down) throttles redraws to about once a minute, so a frame must not
+    /// keep claiming LIVE for values that can no longer be re-checked every second.
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    private let sportColor = SportPalette.accent
     private var fresh: Bool { usesSampleData ? rtStats.isConnected : rtStats.isFresh(now: now) }
+    private var wristDown: Bool { (isLuminanceReduced && !usesSampleData) || (usesSampleData && previewWristDown) }
     private var batteryAvailable: Bool { usesSampleData ? rtStats.batteryPercentSource == .demo : rtStats.batteryPercentIsAvailable }
     private var faultAvailable: Bool { fresh && (usesSampleData ? rtStats.faultCode != nil : rtStats.faultIsAvailable(now: now)) }
     private var activeFault: UInt8? { faultAvailable ? rtStats.faultCode.flatMap { $0 == 0 ? nil : $0 } : nil }
     private var status: String {
+        if wristDown { return "WRIST DOWN" }
         if usesSampleData { return fresh ? "SAMPLE" : "SAMPLE GAP" }
         return fresh ? "LIVE" : (rtStats.isConnected ? "STALE DATA" : "RECONNECTING")
     }
     private var faultText: String {
         if let code = activeFault { return "ESC faults: \(code) · \(VescFaultCode.label(for: code))" }
+        // A wrist-down frame can be a minute old, so it never shows a green all-clear.
+        if wristDown { return "ESC faults: raise wrist to check" }
         return faultAvailable ? "ESC faults: None" : "ESC faults: Unavailable"
+    }
+    private var faultColor: Color { activeFault != nil ? SportPalette.fault : (faultAvailable && !wristDown ? sportColor : SportPalette.caution) }
+    private var arrivalColor: Color {
+        switch arrival.level {
+        case .exhaustedBeforeArrival: return SportPalette.fault
+        case .belowReserve: return SportPalette.caution
+        case .aboveReserve: return SportPalette.secondaryText
+        case .unavailable: return SportPalette.mutedText
+        }
     }
 
     var body: some View {
         GeometryReader { geometry in
-            // Budget the entire viewport: the Watch clock, demo header and page dots
-            // have already consumed space outside this geometry on the smallest Watch.
-            let gap: CGFloat = 2
-            let statusHeight: CGFloat = 9
+            // Budget the whole viewport. Speed is the hero reading and must stay larger than
+            // the four tiles; the dial sits beside its three destination lines so neither the
+            // arrow nor the text has to shrink to fit under the other on a 40 mm Watch.
+            let gap: CGFloat = 3
+            let statusHeight: CGFloat = 12
             let faultHeight: CGFloat = 24
-            let available = max(0, geometry.size.height - statusHeight - faultHeight - gap * 4)
-            let heroHeight = available * 0.45
-            let tileHeight = available * 0.275
-            let valueSize = min(30, max(17, tileHeight * 0.80))
-            let speedSize = min(38, max(12, min(heroHeight * 0.58, heroHeight - 22)))
+            let available = max(0, geometry.size.height - statusHeight - faultHeight - gap * 3)
+            let heroHeight = available * 0.46
+            let tileHeight = available * 0.27
+            let valueSize = min(32, max(17, tileHeight * 0.80))
+            let speedSize = min(44, max(valueSize + 2, heroHeight - 17))
+            let columnWidth = max(0, (geometry.size.width - 10 - 6) / 2)
+            let dialSize = max(14, min(heroHeight, columnWidth * 0.48))
+            let captionSize = min(13, heroHeight / 3.6, max(9.5, heroHeight * 0.25))
             VStack(spacing: gap) {
                 HStack {
-                    Text("● \(status)").foregroundStyle(fresh ? sportColor : .orange)
+                    Text("● \(status)").foregroundStyle(fresh && !wristDown ? sportColor : SportPalette.caution)
                     Spacer()
-                    if isRecording { Text("● REC").foregroundStyle(.red) }
-                }.font(.system(size: 8, weight: .bold)).frame(height: statusHeight)
-                HStack(spacing: 5) {
+                    if isRecording { Text("● REC").foregroundStyle(SportPalette.fault) }
+                }.font(.system(size: 10, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(height: statusHeight)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Telemetry \(status.lowercased())\(isRecording ? ". Recording ride" : "")")
+                HStack(spacing: 6) {
                     VStack(spacing: 1) {
                         Text(speedAvailable ? String(format: "%.1f", displaySpeed) : "—")
                             .font(.system(size: speedSize, weight: .bold, design: .rounded))
-                            .foregroundStyle(sportColor).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
+                            .foregroundStyle(wristDown ? SportPalette.secondaryText : sportColor).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                             .frame(height: speedSize + 2)
-                        Text(speedAvailable ? "GPS · \(speedUnit.displayLabel)" : "GPS unavailable")
-                            .font(.system(size: 8, weight: .semibold)).foregroundStyle(.secondary)
+                        Text(speedAvailable ? "GPS \(speedUnit.displayLabel)" : "GPS unavailable")
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(SportPalette.secondaryText)
                             .lineLimit(1).minimumScaleFactor(0.8)
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(speedAvailable ? "GPS ground speed \(String(format: "%.1f", displaySpeed)) \(speedUnit.displayLabel)" : "GPS speed unavailable")
+                        .accessibilityLabel(speedAvailable ? "GPS ground speed \(String(format: "%.1f", displaySpeed)) \(speedUnit.spokenLabel)" : "GPS speed unavailable")
                     Button(action: onDestinationTap) {
-                        VStack(spacing: 1) {
+                        HStack(spacing: 4) {
                             DestinationCompassNeedle(angle: directionAngle, color: sportColor)
-                                .frame(width: speedSize + 2, height: speedSize + 2)
-                            Text(navigationDistance + " · " + destinationETA)
-                                .foregroundStyle(sportColor).font(.system(size: 7, weight: .semibold))
-                            Text(arrivalBatterySummary)
-                                .foregroundStyle(reserveWarning ? Color.orange : Color.secondary)
-                                .font(.system(size: 7, weight: reserveWarning ? .bold : .medium))
-                        }.lineLimit(1).minimumScaleFactor(0.7)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                .frame(width: dialSize, height: dialSize)
+                            VStack(alignment: .leading, spacing: 0) {
+                                if hasDestination {
+                                    Text(navigationDistance).foregroundStyle(wristDown ? SportPalette.secondaryText : sportColor)
+                                    Text(destinationETA).foregroundStyle(wristDown ? SportPalette.secondaryText : SportPalette.primaryText)
+                                    (Text(Image(systemName: "flag.checkered")).font(.system(size: captionSize * 0.8))
+                                        + Text(" " + arrival.glance))
+                                        .foregroundStyle(arrivalColor)
+                                } else {
+                                    Text("Set").foregroundStyle(sportColor)
+                                    Text("point").foregroundStyle(sportColor)
+                                }
+                            }.font(.system(size: captionSize, weight: .semibold, design: .rounded)).monospacedDigit()
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("destination-arrow")
-                        .accessibilityLabel("Destination setup. \(directionAngle == nil ? "Direction unavailable" : directionReference). \(navigationDistance). \(destinationETA). \(arrivalBatterySummary)")
+                        .accessibilityLabel(destinationAccessibilityLabel)
                 }.frame(height: heroHeight)
-                HStack(spacing: 5) {
-                    tile("POWER", value: fresh ? String(format: "%.0f", rtStats.instantWatts) : "—", unit: "W", size: valueSize, height: tileHeight)
-                    tile("BATTERY", value: fresh && batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : "—", unit: "%", size: valueSize, height: tileHeight,
+                HStack(spacing: 6) {
+                    tile("Power", value: tileValue(String(format: "%.0f", rtStats.instantWatts)), unit: "W", spokenUnit: "watts", size: valueSize, height: tileHeight)
+                    tile("Battery", value: tileValue(batteryAvailable ? String(format: "%.0f", rtStats.batteryPercent) : nil), unit: "%", spokenUnit: "percent", size: valueSize, height: tileHeight,
                          accessibilityDetail: fresh && batteryAvailable ? "Estimated percentage. " + rtStats.batterySourceLabel : "Battery estimate unavailable")
                 }
-                HStack(spacing: 5) {
-                    tile("ESC temperature", value: fresh ? String(format: "%.0f", rtStats.mosTemperature) : "—", unit: "°C", size: valueSize, height: tileHeight)
-                    tile("VOLTAGE", value: fresh ? String(format: "%.1f", rtStats.batteryVoltage) : "—", unit: "V", size: valueSize, height: tileHeight)
+                HStack(spacing: 6) {
+                    tile("ESC temperature", value: tileValue(String(format: "%.0f", rtStats.mosTemperature)), unit: "°C", spokenUnit: "degrees Celsius", size: valueSize, height: tileHeight)
+                    tile("Pack voltage", value: tileValue(String(format: "%.1f", rtStats.batteryVoltage)), unit: "V", spokenUnit: "volts", size: valueSize, height: tileHeight)
                 }
-                Text(faultText).font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(activeFault != nil ? Color.red : (faultAvailable ? sportColor : Color.orange))
-                    .lineLimit(2).minimumScaleFactor(0.8)
+                Text(faultText).font(.system(size: 10.5, weight: .bold))
+                    .foregroundStyle(faultColor)
+                    .lineLimit(2).minimumScaleFactor(0.75).multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, minHeight: faultHeight, maxHeight: faultHeight)
-                    .background((activeFault != nil ? Color.red : (faultAvailable ? sportColor : Color.orange)).opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
-                    .overlay(RoundedRectangle(cornerRadius: 5).stroke((activeFault != nil ? Color.red : (faultAvailable ? sportColor : Color.orange)).opacity(0.65), lineWidth: 0.7))
+                    .background(faultColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(faultColor.opacity(0.7), lineWidth: 1))
                     .accessibilityIdentifier(activeFault != nil ? "esc-fault-warning" : "esc-fault-status")
             }.padding(.horizontal, 5).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(.black)
         }
     }
 
-    private func tile(_ label: String, value: String, unit: String, size: CGFloat, height: CGFloat, accessibilityDetail: String = "") -> some View {
+    private var destinationAccessibilityLabel: String {
+        guard hasDestination else { return "Destination setup. No destination set" }
+        let direction = directionAngle == nil ? "Direction unavailable" : directionReference
+        return "Destination setup. \(direction). Distance \(navigationDistance). Time to arrival \(destinationETA). \(arrival.spoken)"
+    }
+
+    /// Stale values are never shown as current; wrist-down frames keep the value but grey it.
+    private func tileValue(_ value: String?) -> String { fresh ? (value ?? "—") : "—" }
+
+    private func tile(_ label: String, value: String, unit: String, spokenUnit: String, size: CGFloat, height: CGFloat, accessibilityDetail: String = "") -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(value).font(.system(size: size, weight: .bold, design: .rounded)).monospacedDigit()
-            Text(unit).font(.system(size: min(13, max(10, size * 0.44)), weight: .semibold)).foregroundStyle(.white.opacity(0.9))
-        }.lineLimit(1).minimumScaleFactor(0.75)
+                .foregroundStyle(wristDown ? SportPalette.secondaryText : SportPalette.primaryText)
+            Text(unit).font(.system(size: min(15, max(10, size * 0.48)), weight: .semibold)).foregroundStyle(SportPalette.unitText)
+        }.lineLimit(1).minimumScaleFactor(0.7)
+            .padding(.horizontal, 3)
             .frame(maxWidth: .infinity).frame(height: height)
-            .background(sportColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
-            .accessibilityElement(children: .ignore).accessibilityLabel("\(label) \(value) \(unit). \(accessibilityDetail)")
+            .background(sportColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(sportColor.opacity(0.22), lineWidth: 0.75))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(value == "—" ? "\(label) unavailable. \(accessibilityDetail)" : "\(label) \(value) \(spokenUnit). \(accessibilityDetail)")
     }
 }
 
+/// Shared Sport colours. Text colours are chosen for contrast on pure black in daylight.
+enum SportPalette {
+    static let accent = Color(red: 0.48, green: 0.96, blue: 0.69)
+    static let caution = Color(red: 1.0, green: 0.70, blue: 0.30)
+    static let fault = Color(red: 1.0, green: 0.36, blue: 0.38)
+    static let primaryText = Color.white
+    static let secondaryText = Color(white: 0.80)
+    static let unitText = Color(white: 0.86)
+    static let mutedText = Color(white: 0.62)
+}
+
 /// A true direction is drawn only when the caller has a fresh heading/course and bearing.
-/// The neutral ring remains tappable when direction is unavailable.
+/// The arrow is relative to the wearer's heading, so the top index marks "ahead". The neutral
+/// face stays tappable when direction is unavailable.
 struct DestinationCompassNeedle: View {
     let angle: Double?
     let color: Color
 
     var body: some View {
-        ZStack {
-            Circle().stroke(Color.white.opacity(0.16), lineWidth: 0.7)
-            DashboardCompassTicks().stroke(Color.white.opacity(0.32), lineWidth: 0.7)
-            if let angle, angle.isFinite {
-                ZStack {
-                    DashboardNeedleHalf(pointsNorth: false).fill(Color.white.opacity(0.44))
-                    DashboardNeedleHalf(pointsNorth: true).fill(color)
-                }.rotationEffect(.degrees(angle))
-                Circle().fill(color).frame(width: 3, height: 3)
-                    .overlay(Circle().stroke(Color.black, lineWidth: 0.7))
-            } else {
-                Text("—").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-            }
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            let line = max(1, size * 0.035)
+            ZStack {
+                Circle().fill(color.opacity(0.12))
+                if let angle, angle.isFinite {
+                    Circle().stroke(color.opacity(0.55), lineWidth: line)
+                    DashboardCompassTicks().stroke(Color.white.opacity(0.45), style: StrokeStyle(lineWidth: line, lineCap: .round))
+                    DashboardAheadIndex().fill(Color.white)
+                    ZStack {
+                        DashboardNeedleTail().fill(color.opacity(0.35))
+                        DashboardNeedleFacet(leading: true).fill(color)
+                        DashboardNeedleFacet(leading: false).fill(Color(red: 0.80, green: 1.0, blue: 0.88))
+                    }.rotationEffect(.degrees(angle))
+                    Circle().fill(Color.white).frame(width: max(3, size * 0.12), height: max(3, size * 0.12))
+                        .overlay(Circle().stroke(Color.black, lineWidth: max(0.7, size * 0.025)))
+                } else {
+                    Circle().stroke(Color.white.opacity(0.35), style: StrokeStyle(lineWidth: line, dash: [max(2, size * 0.07), max(2, size * 0.06)]))
+                    Text("—").font(.system(size: max(9, size * 0.32), weight: .bold)).foregroundStyle(SportPalette.mutedText)
+                }
+            }.frame(width: size, height: size)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }.accessibilityHidden(true)
     }
 }
 
-private struct DashboardNeedleHalf: Shape {
-    let pointsNorth: Bool
-
+/// Short dim tail opposite the pointer, so the forward end is unambiguous at a glance.
+private struct DashboardNeedleTail: Shape {
     func path(in rect: CGRect) -> Path {
-        let tipY = pointsNorth ? rect.minY + rect.height * 0.08 : rect.maxY - rect.height * 0.08
-        let baseY = pointsNorth ? rect.midY + rect.height * 0.04 : rect.midY - rect.height * 0.04
         var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: tipY))
-        path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.12, y: baseY))
-        path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.12, y: baseY))
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY - rect.height * 0.18))
+        path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.13, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.13, y: rect.midY))
         path.closeSubpath()
         return path
     }
 }
 
+/// One side of the forward pointer; two facets with different brightness read as a solid
+/// arrow in glare without relying on fine detail.
+private struct DashboardNeedleFacet: Shape {
+    let leading: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let tipY = rect.minY + rect.height * 0.10
+        let baseY = rect.midY + rect.height * 0.06
+        let baseX = leading ? rect.midX - rect.width * 0.15 : rect.midX + rect.width * 0.15
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: tipY))
+        path.addLine(to: CGPoint(x: baseX, y: baseY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.midY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// Fixed "ahead" marker at twelve o'clock: the needle points relative to this mark.
+private struct DashboardAheadIndex: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.13))
+        path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.07, y: rect.minY - rect.height * 0.01))
+        path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.07, y: rect.minY - rect.height * 0.01))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// East, south and west ticks; north is the filled "ahead" index.
 private struct DashboardCompassTicks: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.09))
         path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - rect.height * 0.09))
         path.move(to: CGPoint(x: rect.minX, y: rect.midY))
@@ -186,11 +280,8 @@ struct DemoWatchView: View {
         guard !simulateGap, isFixtureTarget else { return nil }
         return sampleEstimator.prediction(etaSeconds: sampleETA, reservePercent: destinationManager.reservePercent, now: fixtureTime)
     }
-    private var sampleArrivalSummary: String {
-        guard let prediction = samplePrediction else { return "Arrival battery —" }
-        if prediction.willExhaustBeforeArrival { return "Runs out before arrival" }
-        if prediction.reserveShortfallPercent > 0 { return String(format: "Arrival ~%.0f%% · short %.0f%%", floor(max(0, prediction.arrivalPercent)), ceil(prediction.reserveShortfallPercent)) }
-        return String(format: "Arrival ~%.0f%%", floor(max(0, prediction.arrivalPercent)))
+    private var sampleArrival: ArrivalBatterySummary {
+        ArrivalBatterySummary(prediction: samplePrediction, reservePercent: destinationManager.reservePercent)
     }
 
     var body: some View {
@@ -206,10 +297,11 @@ struct DemoWatchView: View {
                               speedAvailable: true, connectionMessage: "", isRecording: true,
                               now: Date(), usesSampleData: true,
                               directionAngle: destinationManager.arrowAngle(current: sampleCoordinate, heading: 0), directionReference: "GPS course",
-                              navigationDistance: destinationManager.formattedDistance(sampleDistance).replacingOccurrences(of: "Distance: ", with: ""),
-                              destinationETA: destinationManager.formattedETA(sampleETA).replacingOccurrences(of: "ETA: ", with: ""),
-                              arrivalBatterySummary: sampleArrivalSummary,
-                              reserveWarning: (samplePrediction?.reserveShortfallPercent ?? 0) > 0,
+                              hasDestination: destinationManager.destination != nil,
+                              navigationDistance: NavigationFormat.distance(sampleDistance),
+                              destinationETA: NavigationFormat.duration(sampleETA),
+                              arrival: sampleArrival,
+                              previewWristDown: ProcessInfo.processInfo.arguments.contains("--demo-wrist"),
                               onDestinationTap: { showDestination = true }).tag(0)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 7) {

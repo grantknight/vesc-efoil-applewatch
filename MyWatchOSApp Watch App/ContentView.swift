@@ -3,7 +3,7 @@ import MapKit
 import CoreLocation
 
 private var requestsDemo: Bool {
-    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination", "--demo-bms", "--demo-bms-unavailable"].contains($0) }
+    ProcessInfo.processInfo.arguments.contains { ["--demo", "--demo-navigation", "--demo-fault", "--demo-destination", "--demo-bms", "--demo-bms-unavailable", "--demo-wrist"].contains($0) }
 }
 
 private enum HomeSheet: String, Identifiable {
@@ -57,6 +57,7 @@ private struct ConnectionScreen: View {
     @Binding var showDemo: Bool
     @Binding var showHistory: Bool
     @State private var showBMS = false
+    @State private var confirmSave = false
 
     var body: some View {
         NavigationStack {
@@ -74,7 +75,9 @@ private struct ConnectionScreen: View {
                             }
                             if bluetoothManager.state != .off {
                                 Button(bluetoothManager.state == .connecting ? "Cancel connection" : "Scan again") {
-                                    bluetoothManager.restart(withNewDevice: bluetoothManager.state == .connecting)
+                                    // Cancelling keeps the saved controller and any active ride.
+                                    if bluetoothManager.state == .connecting { bluetoothManager.cancelConnectionAttempt() }
+                                    else { bluetoothManager.restart() }
                                 }
                             }
                         }
@@ -91,8 +94,8 @@ private struct ConnectionScreen: View {
                                 Button("Retry storage") { logger.retryLoad() }
                             }
                             if logger.isRecording {
-                                Text("Ride recording · reconnecting").foregroundStyle(.orange).font(.caption)
-                                Button("Save ride") { logger.endRide() }
+                                Text(bluetoothManager.state == .connecting ? "Ride recording · reconnecting" : "Ride recording · VESC not connected").foregroundStyle(.orange).font(.caption)
+                                Button("Save ride") { confirmSave = true }
                             }
                             Button("Ride history") { showHistory = true }
                             Button("Preview app") { showDemo = true }
@@ -103,6 +106,10 @@ private struct ConnectionScreen: View {
                 }.sheet(isPresented: $showBMS) {
                     BMSConnectionView(manager: bmsManager, excludedVESC: bluetoothManager.selectedPeripheralID)
                 }
+                .alert("Save this ride?", isPresented: $confirmSave) {
+                    Button("Save ride") { logger.endRide() }
+                    Button("Keep recording", role: .cancel) {}
+                } message: { Text("Finish recording and keep this ride in history. Keep recording to continue this ride when the VESC reconnects.") }
     }
 
     private var connectionTitle: String {
@@ -128,11 +135,13 @@ struct Home: View {
     @ObservedObject var bmsManager: BMSManager
     @ObservedObject private var rtStats: VESCRtStats
     @ObservedObject private var logger = SessionLogger.shared
+    @ObservedObject private var workout = RideWorkoutSession.shared
     @Binding var showDemo: Bool
     let showConnection: () -> Void
     @State private var tabSelected = 0
     @State private var sheet: HomeSheet?
     @State private var confirmSave = false
+    @State private var confirmChangeVESC = false
     @State private var arrivalEstimator = ArrivalBatteryEstimator()
     @StateObject private var locationManager = LocationManager()
     @StateObject private var destinationManager = DestinationManager()
@@ -159,13 +168,8 @@ struct Home: View {
         guard rtStats.isFresh(), rtStats.batteryPercentIsAvailable, locationManager.hasFreshSpeed else { return "Fresh battery and GPS observations are required" }
         return arrivalEstimator.predictionUnavailableReason(etaSeconds: eta, reservePercent: destinationManager.reservePercent) ?? "Measured consumption estimate"
     }
-    private var dashboardArrival: String {
-        if let prediction {
-            if prediction.willExhaustBeforeArrival { return "Runs out before arrival" }
-            if prediction.reserveShortfallPercent > 0 { return String(format: "Arrival ~%.0f%% · short %.0f%%", floor(max(0, prediction.arrivalPercent)), ceil(prediction.reserveShortfallPercent)) }
-            return String(format: "Arrival ~%.0f%%", floor(max(0, prediction.arrivalPercent)))
-        }
-        return "Arrival battery —"
+    private var arrival: ArrivalBatterySummary {
+        ArrivalBatterySummary(prediction: prediction, reservePercent: destinationManager.reservePercent)
     }
 
     var body: some View {
@@ -175,13 +179,13 @@ struct Home: View {
                     rtStats: rtStats, displaySpeed: displaySpeed, speedUnit: speedUnit,
                     speedAvailable: locationManager.hasFreshSpeed,
                     connectionMessage: bluetoothManager.connectionMessage,
-                    isRecording: logger.isRecording, now: Date(),
+                    isRecording: logger.isRecording, now: timeline.date,
                     directionAngle: destinationManager.arrowAngle(current: freshCoordinate, heading: locationManager.directionHeading),
                     directionReference: locationManager.directionReference,
-                    navigationDistance: destinationManager.formattedDistance(remainingDistance).replacingOccurrences(of: "Distance: ", with: ""),
-                    destinationETA: destinationManager.formattedETA(eta).replacingOccurrences(of: "ETA: ", with: ""),
-                    arrivalBatterySummary: dashboardArrival,
-                    reserveWarning: (prediction?.reserveShortfallPercent ?? 0) > 0,
+                    hasDestination: destinationManager.destination != nil,
+                    navigationDistance: NavigationFormat.distance(remainingDistance),
+                    destinationETA: NavigationFormat.duration(eta),
+                    arrival: arrival,
                     onDestinationTap: { sheet = .destination }
                 )
             }.tag(0)
@@ -217,10 +221,18 @@ struct Home: View {
                             detail("Energy used", String(format: "%.1f Wh", ride.energyWh))
                             detail("Peak power", String(format: "%.0f W", ride.maxWatts))
                             Button("Save ride") { confirmSave = true }.tint(.cyan)
+                            if !workout.status.rideNote.isEmpty {
+                                Text(workout.status.rideNote).font(.caption2)
+                                    .foregroundStyle(workout.status == .running ? Color.secondary : Color.orange)
+                            }
                             Text("Recording pauses telemetry during connection gaps.").font(.caption2).foregroundStyle(.secondary)
                         } else {
                             Text("Ready when you are.").font(.caption).foregroundStyle(.secondary)
-                            Button("Start ride") { logger.startRide() }
+                            Button("Start ride") {
+                                logger.startRide()
+                                // Water Lock disables swiping, so riding starts on the dashboard.
+                                if logger.isRecording { tabSelected = 0 }
+                            }
                                 .disabled(!rtStats.isFresh())
                                 .tint(.cyan)
                             Text("Start after live telemetry arrives. Ride data saves on this Watch.")
@@ -246,7 +258,18 @@ struct Home: View {
                 VStack(spacing: 10) {
                     Label("Foil Assist", systemImage: "water.waves").font(.headline).foregroundStyle(.cyan)
                     Button("Settings") { sheet = .settings }
-                    Button("Connect VESC", action: showConnection)
+                    Button(bluetoothManager.state == .connected ? "Change VESC" : "Connect VESC") {
+                        // A live link is only dropped after confirmation.
+                        if bluetoothManager.state == .connected { confirmChangeVESC = true } else { showConnection() }
+                    }
+                    .alert("Change the connected VESC?", isPresented: $confirmChangeVESC) {
+                        Button("Change", role: .destructive) {
+                            // Forget the saved controller so it cannot auto-reconnect before another is chosen.
+                            bluetoothManager.restart(withNewDevice: true)
+                            showConnection()
+                        }
+                        Button("Keep connected", role: .cancel) {}
+                    } message: { Text("Telemetry stops and an active ride is saved. Then choose a controller from the list.") }
                     Button("Connect battery BMS") {
                         bmsManager.excludePeripheral(bluetoothManager.selectedPeripheralID)
                         sheet = .bms
@@ -276,13 +299,15 @@ struct Home: View {
                 guard let locationManager, locationManager.hasFreshSpeed else { return nil }
                 return locationManager.smoothedSpeedMs
             }
+            bluetoothManager.displaySpeedProvider = { [weak locationManager] in
+                guard let locationManager else { return (nil, .kph) }
+                return (locationManager.hasFreshSpeed ? locationManager.speed : nil, locationManager.speedUnit)
+            }
         }
         .onDisappear {
             locationManager.stop()
             bluetoothManager.gpsSpeedProvider = nil
-        }
-        .onChange(of: locationManager.speed) { _, _ in
-            bluetoothManager.publishTelemetrySnapshot(displaySpeed: displaySpeed, speedUnit: speedUnit)
+            bluetoothManager.displaySpeedProvider = nil
         }
         .onChange(of: rtStats.lastTelemetryTimestamp) { _, timestamp in
             arrivalEstimator.observe(percent: rtStats.batteryPercentIsAvailable ? rtStats.batteryPercent : nil,
@@ -320,43 +345,52 @@ struct NavigationSummaryView: View {
     var usesSampleData = false
     @State private var showEditor = false
 
+    private var arrival: ArrivalBatterySummary {
+        ArrivalBatterySummary(prediction: prediction, reservePercent: destinationManager.reservePercent)
+    }
+    private var arrivalColor: Color {
+        switch arrival.level {
+        case .exhaustedBeforeArrival: return SportPalette.fault
+        case .belowReserve: return SportPalette.caution
+        case .aboveReserve: return SportPalette.accent
+        case .unavailable: return SportPalette.caution
+        }
+    }
+
     var body: some View {
             ScrollView {
                 VStack(spacing: 4) {
                     Text(destinationManager.destination == nil ? "Choose destination" : destinationManager.destinationName)
-                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.mint).lineLimit(1).minimumScaleFactor(0.8)
+                        .font(.system(size: 14, weight: .bold)).foregroundStyle(SportPalette.accent).lineLimit(1).minimumScaleFactor(0.8)
                     let angle = destinationManager.arrowAngle(current: currentCoordinate, heading: heading)
-                    HStack(spacing: 7) {
+                    HStack(spacing: 8) {
                         Button { showEditor = true } label: {
-                            DestinationCompassNeedle(angle: angle, color: .mint)
-                                .frame(width: 28, height: 28)
+                            DestinationCompassNeedle(angle: angle, color: SportPalette.accent)
+                                .frame(width: 54, height: 54)
                         }.buttonStyle(.plain).accessibilityLabel("Destination setup")
-                        Text(angle == nil ? "Direction unavailable" : directionReference)
-                            .font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary).lineLimit(2)
-                    }.frame(height: 28)
-                    Text(destinationManager.formattedDistance(destinationManager.distance(from: currentCoordinate)).replacingOccurrences(of: "Distance: ", with: "") + " · " + destinationManager.formattedETA(eta))
-                        .font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                    if let prediction {
-                        Text(String(format: "Arrival ~%.0f%% · reserve %.0f%%", floor(max(0, prediction.arrivalPercent)), destinationManager.reservePercent))
-                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(prediction.reserveShortfallPercent > 0 ? Color.orange : Color.mint)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        if prediction.willExhaustBeforeArrival {
-                            Text("Battery may run out before arrival").font(.system(size: 9, weight: .bold)).foregroundStyle(.red).lineLimit(2)
-                        }
-                        if prediction.reserveShortfallPercent > 0 {
-                            Text(String(format: "Reserve short by %.0f%%", ceil(prediction.reserveShortfallPercent)))
-                                .font(.system(size: 10, weight: .bold)).foregroundStyle(.orange)
-                        }
-                    } else {
-                        Text("Arrival battery unavailable").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
-                        Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.system(size: 10))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(NavigationFormat.distance(destinationManager.distance(from: currentCoordinate)))
+                                .font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit()
+                            Text("ETA " + NavigationFormat.duration(eta))
+                                .font(.system(size: 13, weight: .semibold, design: .rounded)).monospacedDigit()
+                            Text(angle == nil ? "Direction unavailable" : directionReference)
+                                .font(.system(size: 10, weight: .medium)).foregroundStyle(SportPalette.secondaryText)
+                        }.lineLimit(1).minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Button("Destination setup") { showEditor = true }.font(.caption).tint(.mint).padding(.top, 4)
+                    Text(arrival.detail)
+                        .font(.system(size: 12, weight: .bold)).foregroundStyle(arrivalColor)
+                        .lineLimit(2).minimumScaleFactor(0.8)
+                        .accessibilityLabel(arrival.spoken)
+                    if arrival.level == .unavailable {
+                        Text(String(format: "Reserve %.0f%%", destinationManager.reservePercent)).font(.system(size: 11))
+                    }
+                    Button("Destination setup") { showEditor = true }.font(.caption).tint(SportPalette.accent).padding(.top, 4)
                     if let prediction {
-                        Text("Battery time ~" + durationText(prediction.secondsUntilEmpty)).font(.caption)
+                        Text("Battery time ~" + NavigationFormat.duration(prediction.secondsUntilEmpty)).font(.caption)
                         if prediction.depletionPercentPerSecond.isFinite, prediction.depletionPercentPerSecond > 0 {
                             let untilReserve = max(0, prediction.secondsUntilEmpty - destinationManager.reservePercent / prediction.depletionPercentPerSecond)
-                            Text("To reserve ~" + durationText(untilReserve)).font(.caption2)
+                            Text("To reserve ~" + NavigationFormat.duration(untilReserve)).font(.caption2)
                         }
                         Text("Estimated time to empty from recent consumption.").font(.caption2).foregroundStyle(.secondary)
                     } else {
@@ -369,10 +403,6 @@ struct NavigationSummaryView: View {
                 .sheet(isPresented: $showEditor) {
                     DestinationPickerView(destinationManager: destinationManager, currentCoordinate: currentCoordinate, usesSampleData: usesSampleData)
                 }
-    }
-
-    private func durationText(_ seconds: TimeInterval) -> String {
-        destinationManager.formattedETA(max(0, seconds)).replacingOccurrences(of: "ETA: ", with: "")
     }
 }
 
@@ -487,8 +517,14 @@ private struct MapPointPickerView: View {
         self.pointKind = pointKind
         self.pointName = pointName
         let existing = pointKind == .launch ? destinationManager.launchCoordinate : destinationManager.finishCoordinate
-        let center = existing ?? currentCoordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
-        _region = State(initialValue: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)))
+        let other = pointKind == .launch ? destinationManager.finishCoordinate : destinationManager.launchCoordinate
+        // Without a fix or a saved point there is no honest local centre, so start zoomed out
+        // and require zooming in before a pin can be saved (never a silent 0,0 pin).
+        if let center = existing ?? currentCoordinate ?? other {
+            _region = State(initialValue: MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)))
+        } else {
+            _region = State(initialValue: MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 20, longitude: 0), span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 120)))
+        }
     }
 
     private var pins: [MapPointPin] {
@@ -505,14 +541,25 @@ private struct MapPointPickerView: View {
                 MapMarker(coordinate: point.coordinate, tint: point.id == "launch" ? .orange : .mint)
             }
             .overlay { Image(systemName: "plus").foregroundStyle(.white).padding(5).background(.black.opacity(0.5), in: Circle()).allowsHitTesting(false) }
-            Text(String(format: "%.5f, %.5f", region.center.latitude, region.center.longitude)).font(.caption2).monospacedDigit()
+            if zoomedInEnough {
+                Text(String(format: "%.5f, %.5f", region.center.latitude, region.center.longitude)).font(.caption2).monospacedDigit()
+            } else {
+                Text(hasStartingPoint ? "Zoom in to place the pin." : "No GPS fix. Zoom in on your spot.").font(.caption2).foregroundStyle(.orange)
+            }
             Button("Save \(pointKind.title) here") {
-                guard region.center.latitude.isFinite, region.center.longitude.isFinite, CLLocationCoordinate2DIsValid(region.center) else { return }
+                guard zoomedInEnough, region.center.latitude.isFinite, region.center.longitude.isFinite, CLLocationCoordinate2DIsValid(region.center) else { return }
                 if pointKind == .launch { destinationManager.saveLaunchPoint(region.center, name: pointName.isEmpty ? "Launch / beach" : pointName) }
                 else { destinationManager.setDestination(region.center, name: pointName.isEmpty ? "Finish" : pointName) }
                 dismiss()
-            }.font(.caption).tint(.mint).accessibilityIdentifier("save-map-center")
+            }.font(.caption).tint(.mint).disabled(!zoomedInEnough).accessibilityIdentifier("save-map-center")
         }.navigationTitle("Place a pin")
+    }
+
+    /// Roughly 20 km tall or closer. Normal use opens at about 3 km, so this only blocks
+    /// saving from the zoomed-out view shown when there is no fix or saved point.
+    private var zoomedInEnough: Bool { region.span.latitudeDelta <= 0.2 }
+    private var hasStartingPoint: Bool {
+        currentCoordinate != nil || destinationManager.launchCoordinate != nil || destinationManager.finishCoordinate != nil
     }
 }
 
@@ -529,10 +576,23 @@ struct SettingsView: View {
     @State private var useVescBattery = BatteryConfig.useVescBatteryLevel
     @State private var showDestinationPicker = false
     @State private var showBMS = false
+    @ObservedObject private var workout = RideWorkoutSession.shared
 
     var body: some View {
         NavigationStack {
             Form {
+                if workout.needsPermission {
+                    Section("Wrist-down logging") {
+                        Button("Allow background ride logging") { workout.requestPermission() }
+                        Text("One-time Health permission so a recording ride keeps logging with your wrist down. Nothing is saved to Health.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                } else if workout.permissionDenied {
+                    Section("Wrist-down logging") {
+                        Text("Off. Allow Foil Assist in the Health privacy settings to keep logging with your wrist down.")
+                            .font(.caption2).foregroundStyle(.orange)
+                    }
+                }
                 Section("GPS") {
                     Toggle("Enable GPS", isOn: Binding(
                         get: { locationManager.isEnabled() },

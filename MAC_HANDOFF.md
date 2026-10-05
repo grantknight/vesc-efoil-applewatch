@@ -12,6 +12,7 @@
 1. Add your Apple account in Xcode Settings and enable Developer Mode on your paired devices as required by Xcode.
 2. Under Signing & Capabilities select your development team on **all three targets**. Replace default bundle identifiers if your team needs unique registered identifiers. The supplied identifiers share `com.grantknight.vescfoil`.
 3. Provision the same App Group for the watch app and complication. See `WIDGET_SETUP.md` for all places to change a group identifier.
+   Also enable the **HealthKit** capability on the Watch app target (the entitlement is already in `MyWatchOSApp Watch App.entitlements`) and keep the **Workout processing** and **Location updates** background modes from the Info.plist. These let a recording ride keep running with the wrist down. Nothing is saved to the Health app.
 4. Select your paired Watch as the run destination, build, and run. Allow Bluetooth and location access on the Watch.
 5. Select the VESC BLE UART device from the scan list. The app expects Nordic UART service UUID `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` and the standard VESC packet protocol. Verify your BLE adapter advertises that service. The app only polls telemetry; it sends no throttle or drive commands.
 6. In Settings set the battery series cell count and decide whether to use VESC's reported battery level or the voltage estimate. New installations default to the confirmed 12S pack; existing saved settings are retained. Confirm the voltage curve against your pack chemistry and controller configuration.
@@ -37,7 +38,8 @@ Before relying on the readings, verify:
 - GPS speed is displayed only with fresh valid location data; propeller RPM is never treated as speed over water.
 - Start, ride, save, quit and reopen preserves history. Confirm the recovered label after terminating during recording.
 - Turn off or move out of range of the BLE adapter, reconnect and confirm the same ride continues with a gap rather than fabricated data.
-- Let the Watch screen sleep, lower your wrist, use Water Lock, and reopen. Background runtime and reconnect timing must be measured on your Watch. Continuous logging while suspended is not promised.
+- Start a ride and accept the one-time Health prompt (needed only to run the background workout). The ride page should say "Keeps logging with your wrist down." Lower your wrist for several minutes, use Water Lock, then compare the saved ride's duration, energy and GPS distance with the time on the water. Also confirm the Health app gained no workout. If the prompt is declined the ride page says logging pauses when the screen sleeps; check that wording appears. Background runtime and battery cost must be measured on your Watch.
+- Turn the battery/BMS off for 20 seconds during a ride and back on. The BMS page should show reconnect attempts and relink without touching the VESC link.
 - Add the complication, inspect its timestamp/freshness, and tap to reopen the app. Compare displayed cached values to the live screen.
 - Check readability outdoors, wet-hand/crown navigation, GPS battery use, and endurance on an actual ride.
 

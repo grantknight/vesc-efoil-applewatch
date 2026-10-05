@@ -35,8 +35,6 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     private var writeCharacteristic: CBCharacteristic?
     private var notifyCharacteristic: CBCharacteristic?
     private var lastWidgetReload = Date.distantPast
-    private var lastSnapshotSpeed: Double?
-    private var lastSnapshotUnit = "mph"
     private var wasFresh = false
     private var connectedAt: Date?
     private let packet = Packet()
@@ -53,6 +51,9 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
     lazy var sessionLogger = SessionLogger.shared
     /// Returns fresh GPS speed in m/s. nil means unavailable, never propeller speed.
     var gpsSpeedProvider: (() -> Double?)?
+    /// Display-unit GPS speed for the shared snapshot, resolved at publish time so a silent
+    /// GPS stall cannot freeze an old speed under a fresh telemetry timestamp.
+    var displaySpeedProvider: (() -> (speed: Double?, unit: GPSSpeedUnit))?
     var telemetryIsFresh: Bool { state == .connected && vescRtStats.isFresh() }
     /// Also excludes the saved controller while it is temporarily disconnected.
     var selectedPeripheralID: UUID? {
@@ -122,6 +123,23 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         peripherals.removeAll()
         reconnectAttempt = 0
         if centralManager.state == .poweredOn { startScanning() } else { state = .off }
+    }
+    /// Stops a pending connection attempt only. The saved controller and any active ride are
+    /// kept, and no automatic retry runs until the user scans again.
+    func cancelConnectionAttempt() {
+        guard centralManager != nil else { return }
+        connectTimer?.invalidate()
+        connectTimer = nil
+        reconnectTimer?.invalidate()
+        reconnectTimer = nil
+        reconnectAttempt = 0
+        let old = vesc
+        vesc = nil
+        if let old { centralManager.cancelPeripheralConnection(old) }
+        clearConnection()
+        guard centralManager.state == .poweredOn else { state = .off; return }
+        state = .scanningIdle
+        connectionMessage = ""
     }
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard centralManager === central else { return }
@@ -313,9 +331,8 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
             let receivedAt = Date()
             vescRtStats.updateFaultCode(values.faultCode, at: receivedAt)
             vescRtStats.markTelemetryReceived(at: receivedAt)
-            if !BatteryConfig.useVescBatteryLevel,
-               UserDefaults.standard.object(forKey: "BATTERY_CELL_COUNT") != nil,
-               let voltage = values.voltage {
+            // BatteryConfig supplies the confirmed 12S default when no cell count was saved.
+            if !BatteryConfig.useVescBatteryLevel, let voltage = values.voltage {
                 vescRtStats.updateBatteryPercent(BatteryConfig.percent(fromVoltage: voltage), source: .voltageEstimate)
             }
             lastTelemetryAt = receivedAt
@@ -337,15 +354,11 @@ final class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelega
         }
         objectWillChange.send()
     }
-    func publishTelemetrySnapshot(displaySpeed: Double?, speedUnit: GPSSpeedUnit) {
-        lastSnapshotSpeed = displaySpeed
-        lastSnapshotUnit = speedUnit.rawValue
-        publishCurrentSnapshot()
-    }
     private func publishCurrentSnapshot(forceReload: Bool = false) {
         var snapshot = TelemetrySnapshot()
-        snapshot.speed = lastSnapshotSpeed
-        snapshot.speedUnit = lastSnapshotUnit
+        let display = displaySpeedProvider?()
+        snapshot.speed = display?.speed
+        snapshot.speedUnit = (display?.unit ?? .kph).rawValue
         snapshot.watts = vescRtStats.instantWatts
         snapshot.batteryPercent = vescRtStats.batteryPercentIsAvailable ? vescRtStats.batteryPercent : nil
         snapshot.batteryVoltage = vescRtStats.batteryVoltage

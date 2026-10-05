@@ -25,7 +25,9 @@ final class SessionLogger: ObservableObject {
         catch { storageError = error.localizedDescription }
     }
     func startRide() { perform { try $0.startRide() } }
-    func endRide() { perform { try $0.endRide() } }
+    /// A Watch clock that stepped back after the last checkpoint must not block saving the
+    /// ride, so the save time never precedes that checkpoint. The store itself stays strict.
+    func endRide() { perform { try $0.endRide(at: max(Date(), $0.activeRide?.updatedAt ?? .distantPast)) } }
     func deleteRide(id: UUID) { perform { try $0.deleteRide(id: id) } }
     func connectionChanged(isConnected: Bool) {
         // A connection notification may not write anything; it must not hide a failed checkpoint.

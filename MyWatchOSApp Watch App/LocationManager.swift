@@ -16,10 +16,19 @@ enum GPSSpeedUnit: String, CaseIterable, Identifiable {
     var displayLabel: String {
         switch self { case .kph: return "km/h"; case .ms: return "m/s"; default: return rawValue }
     }
+    var spokenLabel: String {
+        switch self {
+        case .kph: return "kilometres per hour"
+        case .mph: return "miles per hour"
+        case .ms: return "metres per second"
+        case .knots: return "knots"
+        }
+    }
 }
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
+    private var recordingObserver: AnyCancellable?
     @Published var speedUnit: GPSSpeedUnit = .kph
     @Published var speed: Double = 0.0
     @Published var rawSpeedMs: Double = 0.0
@@ -82,6 +91,14 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.headingFilter = 3
+        // GPS may keep running with the wrist down only while a ride records (its workout
+        // session keeps the app alive). Setting this without the declared background mode
+        // would crash, so check first.
+        if (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true {
+            recordingObserver = SessionLogger.shared.$isRecording.removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] recording in self?.locationManager.allowsBackgroundLocationUpdates = recording }
+        }
         locationManager.requestWhenInUseAuthorization()
 
         if isEnabled() {
@@ -199,13 +216,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard isEnabled(), isTracking else { return }
         let trueHeading = newHeading.trueHeading
         let resolved = trueHeading
+        // A compass disturbed by the motor or battery reports poor accuracy; ignoring it lets
+        // the arrow fall back to GPS course instead of pointing confidently the wrong way.
         guard resolved.isFinite, (0..<360).contains(resolved), newHeading.headingAccuracy.isFinite,
-              newHeading.headingAccuracy >= 0, isRecent(newHeading.timestamp) else { return }
+              newHeading.headingAccuracy >= 0, newHeading.headingAccuracy <= 45,
+              isRecent(newHeading.timestamp) else { return }
         DispatchQueue.main.async {
             guard self.isEnabled(), self.isTracking else { return }
+            // After a heading gap, start from the new reading instead of easing the arrow
+            // through a direction that is no longer current.
+            let continuous = self.lastHeadingAt.map { newHeading.timestamp.timeIntervalSince($0) <= 10 } ?? false
             self.headingDegrees = resolved
             self.lastHeadingAt = newHeading.timestamp
-            if let previous = self.smoothedHeadingDegrees {
+            if continuous, let previous = self.smoothedHeadingDegrees {
                 let delta = self.shortestAngleDelta(from: previous, to: resolved)
                 self.smoothedHeadingDegrees = self.normalizeAngle(previous + (delta * self.headingSmoothingAlpha))
             } else {

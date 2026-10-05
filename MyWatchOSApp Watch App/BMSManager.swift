@@ -35,6 +35,12 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private var inspectionTimer: Timer?
     private var pollTimer: Timer?
     private var readTimer: Timer?
+    // A lost link is retried a few times with backoff; a user disconnect or new choice cancels it.
+    private var reconnectID: UUID?
+    private var reconnectName: String?
+    private var reconnectAttempt = 0
+    private var reconnectTimer: Timer?
+    private static let maxReconnectAttempts = 6
     private var readQueue: [CBCharacteristic] = []
     private var reading: CBCharacteristic?
     private var batteryCharacteristic: CBCharacteristic?
@@ -58,7 +64,7 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
     deinit {
         scanTimer?.invalidate(); connectionTimer?.invalidate(); inspectionTimer?.invalidate()
-        pollTimer?.invalidate(); readTimer?.invalidate()
+        pollTimer?.invalidate(); readTimer?.invalidate(); reconnectTimer?.invalidate()
     }
 
     func hasFreshStandardBatteryPercent(at date: Date = Date()) -> Bool {
@@ -71,7 +77,7 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         if let id {
             discovered.removeValue(forKey: id)
             devices.removeAll { $0.id == id }
-            if selected?.identifier == id {
+            if selected?.identifier == id || reconnectID == id {
                 disconnect()
                 statusMessage = "VESC excluded. Select a separate battery/BMS."
             }
@@ -96,6 +102,7 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             statusMessage = "Disconnect the battery/BMS before scanning again."
             return
         }
+        cancelReconnect()
         scanRequested = true
         scanTimer?.invalidate()
         scanTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
@@ -135,6 +142,7 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             statusMessage = "Disconnect the current battery/BMS before choosing another device."
             return
         }
+        cancelReconnect()
         central.stopScan(); scanTimer?.invalidate(); scanTimer = nil; scanRequested = false
         clearReadings()
         selected = peripheral
@@ -148,7 +156,12 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             self.failConnection("Battery/BMS connection timed out.")
         }
     }
+    /// User-initiated: also stops any automatic reconnection.
     func disconnect() {
+        cancelReconnect()
+        tearDown()
+    }
+    private func tearDown() {
         scanRequested = false
         central?.stopScan()
         scanTimer?.invalidate(); scanTimer = nil
@@ -175,7 +188,55 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         standardBatteryPercent = nil; standardBatteryUpdatedAt = nil; cellSnapshot = nil
         discoveredServiceUUIDs = []; discoveredCharacteristicUUIDs = []
     }
-    private func failConnection(_ message: String) { disconnect(); state = .unavailable; statusMessage = message }
+    private func failConnection(_ message: String) { tearDown(); state = .unavailable; statusMessage = message }
+
+    private func scheduleReconnect(_ id: UUID) {
+        guard !demoMode, id != excludedID, reconnectAttempt < Self.maxReconnectAttempts else {
+            let wasReconnecting = reconnectID != nil
+            cancelReconnect()
+            if wasReconnecting && selected == nil {
+                state = .unavailable
+                statusMessage = "Battery/BMS did not reconnect. Scan to connect again."
+            }
+            return
+        }
+        reconnectID = id
+        reconnectAttempt += 1
+        let delay = min(30, 2 * pow(2, Double(reconnectAttempt - 1)))
+        statusMessage = "Battery/BMS link lost. Reconnecting (attempt \(reconnectAttempt) of \(Self.maxReconnectAttempts)). VESC is unaffected."
+        reconnectTimer?.invalidate()
+        reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.reconnectTimer = nil
+            self?.attemptReconnect()
+        }
+    }
+    private func cancelReconnect() {
+        reconnectTimer?.invalidate(); reconnectTimer = nil
+        reconnectID = nil; reconnectName = nil; reconnectAttempt = 0
+    }
+    private func attemptReconnect() {
+        guard let id = reconnectID, !demoMode, selected == nil, reconnectTimer == nil else { return }
+        activate()
+        // A newly created central continues from centralManagerDidUpdateState once powered on.
+        guard let central, central.state == .poweredOn else { return }
+        guard let peripheral = central.retrievePeripherals(withIdentifiers: [id]).first, id != excludedID else {
+            scheduleReconnect(id)
+            return
+        }
+        selected = peripheral
+        peripheral.delegate = self
+        linkedDeviceName = reconnectName ?? "Battery/BMS"
+        state = .connecting
+        statusMessage = "Reconnecting battery/BMS. VESC is unaffected."
+        central.connect(peripheral, options: nil)
+        connectionTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self, weak peripheral] _ in
+            guard let self, let peripheral, self.selected === peripheral, self.state == .connecting else { return }
+            let name = self.linkedDeviceName
+            self.failConnection("Battery/BMS did not reconnect.")
+            self.reconnectName = name
+            self.scheduleReconnect(id)
+        }
+    }
 
     func centralManagerDidUpdateState(_ manager: CBCentralManager) {
         guard central === manager, !demoMode else { return }
@@ -193,6 +254,7 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         }
         state = .idle
         if scanRequested { beginScan() }
+        else if reconnectID != nil { attemptReconnect() }
     }
     func centralManager(_ manager: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
@@ -209,6 +271,7 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         guard central === manager, !demoMode, selected === peripheral, state == .connecting,
               peripheral.identifier != excludedID else { return }
         connectionTimer?.invalidate(); connectionTimer = nil
+        cancelReconnect()
         state = .linked
         inspectionActive = true
         statusMessage = "Linked. 12S cell protocol unidentified; no cell measurements."
@@ -227,11 +290,17 @@ final class BMSManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
     func centralManager(_ manager: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         guard central === manager, selected === peripheral, !demoMode else { return }
+        let retrying = reconnectID == peripheral.identifier
+        let name = linkedDeviceName
         failConnection("Battery/BMS connection failed. Retry after checking its phone app.")
+        if retrying { reconnectName = name; scheduleReconnect(peripheral.identifier) }
     }
     func centralManager(_ manager: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         guard central === manager, selected === peripheral, !demoMode else { return }
+        let wasLinked = state == .linked || reconnectID == peripheral.identifier
+        let name = linkedDeviceName
         failConnection("Battery/BMS link lost. VESC connection is independent.")
+        if wasLinked { reconnectName = name; scheduleReconnect(peripheral.identifier) }
     }
     private func current(_ peripheral: CBPeripheral) -> Bool {
         !demoMode && state == .linked && selected === peripheral && peripheral.identifier != excludedID
