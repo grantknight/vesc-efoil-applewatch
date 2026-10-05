@@ -50,8 +50,10 @@ struct DashboardView: View {
             // them; the smallest Watch keeps the screenshot-verified 7pt budget.
             let captionSize: CGFloat = heroHeight >= 46 ? 8 : 7
             // The dial budgets its own height so a larger speed cannot push the
-            // destination distance, ETA and arrival lines out of the hero row.
-            let needleSize = max(20, min(speedSize + 2, heroHeight - (captionSize * 2 + 6)))
+            // destination distance, ETA and arrival lines out of the hero row. The
+            // floor stays below the caption budget even on degenerate geometries,
+            // so the hero row never overflows onto the telemetry tiles.
+            let needleSize = max(14, min(speedSize + 2, heroHeight - (captionSize * 2 + 6)))
             VStack(spacing: gap) {
                 HStack {
                     Text("● \(status)").foregroundStyle(fresh ? sportColor : .orange)
